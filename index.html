@@ -144,7 +144,7 @@
                             </div>
                         </div>
                         <h1 className="text-3xl font-black tracking-widest text-white mb-2">SUPER EXAM SYSTEM</h1>
-                        <p className="text-gray-400 mb-8 text-sm">請輸入班級名稱來建立專屬考場</p>
+                        <p className="text-gray-400 mb-8 text-sm">請輸入教室代碼以存取您的專屬考場</p>
                         
                         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                             <div className="relative">
@@ -184,8 +184,8 @@
             const [config, setConfig] = useState({ 
                 rows: 5, 
                 cols: 7, 
-                date: getTodayString(), // 改用日期格式
-                systemTitle: 'SUPER EXAM SYSTEM' 
+                date: getTodayString(), 
+                systemTitle: '' // 改為空字串，以便優先顯示 activeClassroom
             });
             const [schedule, setSchedule] = useState(DEFAULT_SCHEDULE);
             const [rosterText, setRosterText] = useState(DEFAULT_ROSTER);
@@ -225,11 +225,8 @@
                     if (savedLocal) {
                         try {
                             const parsed = JSON.parse(savedLocal);
-                            // 兼容舊資料 title -> date
                             let dateVal = parsed.config?.date || getTodayString();
                             if (parsed.config && !parsed.config.date && parsed.config.title) {
-                                // 嘗試從舊標題解析日期，如果失敗就用今天
-                                // 這裡簡單處理，直接用今天，因為舊標題通常是文字
                                 dateVal = getTodayString();
                             }
 
@@ -317,7 +314,7 @@
             // 管理員功能：刪除班級資料
             const deleteClassroomData = async () => {
                 if (!activeClassroom) return;
-                const confirmCode = prompt(`警告：這將會永久刪除「${activeClassroom}」的所有資料且無法復原！\n\n請輸入班級名稱「${activeClassroom}」以確認刪除：`);
+                const confirmCode = prompt(`警告：這將會永久刪除「${activeClassroom}」的所有資料且無法復原！\n\n請輸入教室代碼「${activeClassroom}」以確認刪除：`);
                 
                 if (confirmCode === activeClassroom) {
                     try {
@@ -382,13 +379,11 @@
                         shouldAttend++;
                         if (seat.status !== 'absent') actualAttend++;
                         else {
-                            // 格式化缺考名單：座號 + 姓名
                             const name = rosterMap[seat.number] || '';
                             absentList.push(`${seat.number} ${name}`);
                         }
                     }
                 });
-                // 排序缺考名單 (依座號)
                 absentList.sort((a, b) => {
                     const numA = parseInt(a.split(' ')[0]) || 0;
                     const numB = parseInt(b.split(' ')[0]) || 0;
@@ -457,7 +452,8 @@
                                 />
                             ) : (
                                 <span className="font-black text-xl tracking-widest text-gray-600 hidden md:block">
-                                    {config.systemTitle || 'SUPER EXAM SYSTEM'}
+                                    {/* 這裡改為優先顯示 systemTitle，如果沒有則顯示 activeClassroom */}
+                                    {config.systemTitle || activeClassroom || '班級名稱'}
                                 </span>
                             )}
                             
@@ -480,7 +476,6 @@
                         </div>
                         
                         <div className="flex gap-2">
-                            {/* 新增：並列的模式切換按鈕 */}
                             <div className="flex bg-gray-200 p-1 rounded-lg shadow-inner border border-gray-400">
                                 <button 
                                     onClick={() => setMode('edit')} 
@@ -620,7 +615,7 @@
                         <div className="w-96 flex flex-col gap-4 shrink-0 h-full">
                             <div className="bg-amber-50 rounded-xl flex-1 p-4 pixel-border flex flex-col text-slate-800 overflow-hidden border-4 border-gray-700">
                                 <h3 className="font-bold text-xl border-b-4 border-amber-200 pb-2 mb-3 flex items-center gap-2 text-amber-800 shrink-0"><Icon name="calendar" size={24} /> 今日考程</h3>
-                                <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                                <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2 pr-1 custom-scrollbar">
                                     {schedule.map((item, idx) => {
                                         const active = isCurrentSubject(item.time);
                                         return (
