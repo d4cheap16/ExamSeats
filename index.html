@@ -125,11 +125,11 @@
                 e.preventDefault();
                 const code = input.trim();
                 if (!code) {
-                    setError('請輸入教室代碼');
+                    setError('請輸入班級名稱');
                     return;
                 }
                 if (!/^[a-zA-Z0-9_\u4e00-\u9fa5]+$/.test(code)) {
-                    setError('代碼只能包含中文、英文、數字或底線');
+                    setError('班級名稱只能包含中文、英文、數字或底線');
                     return;
                 }
                 onLogin(code);
@@ -144,7 +144,7 @@
                             </div>
                         </div>
                         <h1 className="text-3xl font-black tracking-widest text-white mb-2">SUPER EXAM SYSTEM</h1>
-                        <p className="text-gray-400 mb-8 text-sm">請輸入教室代碼以存取您的專屬考場</p>
+                        <p className="text-gray-400 mb-8 text-sm">請輸入班級名稱以建立考場</p>
                         
                         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                             <div className="relative">
