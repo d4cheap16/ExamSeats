@@ -51,30 +51,31 @@
             filter: invert(1);
             cursor: pointer;
         }
-        /* 缺考原因下拉選單樣式 */
+        /* 缺考原因下拉選單樣式 - 改為白底黑字 */
         .reason-select {
             appearance: none;
-            background-color: #dc2626; /* red-600 */
-            color: white;
-            border: none;
+            background-color: white; 
+            color: black;
+            border: 2px solid rgba(0,0,0,0.2);
             text-align: center;
             font-size: 0.75rem;
-            font-weight: bold;
+            font-weight: 900;
             cursor: pointer;
             padding: 2px 12px 2px 6px;
             border-radius: 4px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='white' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            /* 箭頭改為黑色 */
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
             background-position: right 0px center;
             background-repeat: no-repeat;
             background-size: 1.2em 1.2em;
         }
         .reason-select:hover {
-            background-color: #b91c1c; /* red-700 */
+            background-color: #f3f4f6; /* gray-100 */
         }
         .reason-select:focus {
             outline: none;
-            ring: 2px solid white;
+            border-color: #2563eb;
         }
     </style>
 </head>
@@ -618,17 +619,13 @@
                                 </div>
                                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                                     <div className="flex items-center gap-2 text-sm font-bold mb-2"><Icon name="user-x" size={18} /><span>缺考 ABSENT:</span></div>
-                                    <div className="text-lg font-bold leading-relaxed">
+                                    <div className="flex flex-wrap content-start gap-x-3 gap-y-1 h-full">
                                         {stats.absentList.length > 0 ? (
-                                            <div className="flex flex-col gap-1">
-                                                {stats.absentList.map((student, idx) => (
-                                                    <div key={idx} className="flex items-center gap-2">
-                                                        <span className="bg-[#0f380f]/10 px-2 py-0.5 rounded min-w-[3rem] text-center">{student.num}</span>
-                                                        <span className="flex-1">{student.text.split(' ')[1]}</span>
-                                                        <span className="text-xs bg-[#0f380f] text-[#9bbc0f] px-1.5 py-0.5 rounded-full">{student.reason}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                            stats.absentList.map((student, idx) => (
+                                                <span key={idx} className="text-sm font-bold whitespace-nowrap">
+                                                    {student.num} {student.text.split(' ')[1]}<span className="text-xs ml-0.5 opacity-80">({student.reason})</span>
+                                                </span>
+                                            ))
                                         ) : '無 (NONE)'}
                                     </div>
                                 </div>
