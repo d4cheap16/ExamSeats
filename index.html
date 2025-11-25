@@ -144,7 +144,7 @@
                             </div>
                         </div>
                         <h1 className="text-3xl font-black tracking-widest text-white mb-2">SUPER EXAM SYSTEM</h1>
-                        <p className="text-gray-400 mb-8 text-sm">請輸入教室代碼以存取您的專屬考場</p>
+                        <p className="text-gray-400 mb-8 text-sm">請輸入班級名稱來建立專屬考場</p>
                         
                         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                             <div className="relative">
@@ -317,7 +317,7 @@
             // 管理員功能：刪除班級資料
             const deleteClassroomData = async () => {
                 if (!activeClassroom) return;
-                const confirmCode = prompt(`警告：這將會永久刪除「${activeClassroom}」的所有資料且無法復原！\n\n請輸入教室代碼「${activeClassroom}」以確認刪除：`);
+                const confirmCode = prompt(`警告：這將會永久刪除「${activeClassroom}」的所有資料且無法復原！\n\n請輸入班級名稱「${activeClassroom}」以確認刪除：`);
                 
                 if (confirmCode === activeClassroom) {
                     try {
