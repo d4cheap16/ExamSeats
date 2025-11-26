@@ -537,6 +537,13 @@ S11
                 }
             };
 
+            // 新增：清空所有座位功能
+            const handleClearSeats = () => {
+                if (confirm('確定要清空所有座位安排嗎？\n\n此動作將移除所有格子內的座號與班級設定，以便重新安排。')) {
+                    setSeats({});
+                }
+            };
+
             const toggleFullScreen = () => {
                 if (!document.fullscreenElement) document.documentElement.requestFullscreen();
                 else if (document.exitFullscreen) document.exitFullscreen();
@@ -709,6 +716,13 @@ S11
                                 {syncStatus === 'loading' ? <Icon name="refresh-cw" className="animate-spin text-blue-500" size={14} /> : syncStatus === 'saving' ? <Icon name="cloud-upload" className="animate-bounce text-blue-500" size={14} /> : syncStatus === 'saved' ? <Icon name="check" className="text-green-600" size={14} /> : syncStatus === 'error' ? <Icon name="cloud-off" className="text-red-500" size={14} /> : syncStatus === 'not-configured' ? <Icon name="alert-circle" className="text-orange-500" size={14} /> : <Icon name="save" className="text-gray-600" size={14} />}
                                 <span className={`text-xs font-bold ${syncStatus === 'saved' ? 'text-green-700' : 'text-gray-600'}`}>{syncStatus === 'loading' ? '讀取...' : syncStatus === 'saving' ? '儲存中...' : syncStatus === 'saved' ? '已儲存' : syncStatus === 'error' ? '失敗' : syncStatus === 'not-configured' ? '未設定' : '點此存檔'}</span>
                             </button>
+                            {/* 新增：清空所有座位按鈕 (僅在編輯模式顯示) */}
+                            {mode === 'edit' && (
+                                <button onClick={handleClearSeats} className="flex items-center gap-2 px-3 py-1 rounded-full border-inner shadow-inner transition-colors bg-red-100 hover:bg-red-200 ml-2" title="清空所有座位">
+                                    <Icon name="trash-2" className="text-red-600" size={14} />
+                                    <span className="text-xs font-bold text-red-700">CLEAR ALL</span>
+                                </button>
+                            )}
                         </div>
                         <div className="flex gap-2">
                             <div className="flex bg-gray-200 p-1 rounded-lg shadow-inner border border-gray-400">
