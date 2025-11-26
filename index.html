@@ -47,7 +47,7 @@
             filter: invert(1);
             cursor: pointer;
         }
-        /* 缺考原因下拉選單樣式 - 改為白底黑字 */
+        /* 缺考原因下拉選單樣式 */
         .reason-select {
             appearance: none;
             background-color: white; 
@@ -60,18 +60,27 @@
             padding: 2px 12px 2px 6px;
             border-radius: 4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-            /* 箭頭改為黑色 */
             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
             background-position: right 0px center;
             background-repeat: no-repeat;
             background-size: 1.2em 1.2em;
         }
         .reason-select:hover {
-            background-color: #f3f4f6; /* gray-100 */
+            background-color: #f3f4f6;
         }
         .reason-select:focus {
             outline: none;
             border-color: #2563eb;
+        }
+        /* 班級標籤樣式 */
+        .class-badge {
+            font-size: 0.6rem;
+            line-height: 1;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
         }
     </style>
 </head>
@@ -130,7 +139,19 @@
             { time: '16:00-17:10', subject: '公民' },
         ];
 
-        const DEFAULT_ROSTER = `1\t周恩佑\n2\t林宏燁\n3\t林恩成\n4\t林晉葳\n5\t林梓軒\n6\t金少澤\n7\t梁家恩\n8\t梁靖昌\n9\t許子寬\n10\t陳卓\n11\t陳藝文\n12\t彭凱毅\n13\t楊閎驛\n14\t劉亭頡\n15\t潘育哲\n16\t溫雁晴\n17\t王苡恩\n18\t王詮儀\n19\t古妮鑫\n20\t向映柔\n21\t朱洧甄\n22\t吳思諭\n23\t吳禹萱\n24\t吳珮妤\n25\t李詠欣\n26\t李芯瑀\n27\t林伽璇\n28\t林瞳\n29\t胡格瑄\n30\t張沛文\n31\t徐芷芸\n32\t曾若庭\n33\t童宇岑\n34\t黃心瑀\n35\t楊采鑫\n36\t楊品歆\n37\t黎容瑄\n38\t藍梓瑜\n39\t林芳仔\n40\t蔣佩芸\n41\t魏瑜廷`;
+        // 預設名單包含混合班級範例
+        const DEFAULT_ROSTER = `高一知足
+1\t周恩佑
+2\t林宏燁
+3\t林恩成
+國三感恩
+1\t林晉葳
+2\t林梓軒
+301
+01\t張小明
+02\t李大華
+S11
+1\t王小美`;
 
         // --- Helpers ---
         const formatDate = (dateStr) => {
@@ -265,7 +286,6 @@
                 if (!code) { setError('請輸入班級名稱'); return; }
                 
                 try {
-                    // 修正：先嘗試加密，若失敗則直接比對 (Fallback)
                     if (window.crypto && window.crypto.subtle) {
                         const hash = await sha256(code);
                         if (hash === ADMIN_HASH) {
@@ -273,7 +293,6 @@
                             return;
                         }
                     } else {
-                        // Fallback for insecure context or no crypto
                         if (code === 'Makima777') {
                              onAdminLogin();
                              return;
@@ -329,6 +348,10 @@
             const [activeClassroom, setActiveClassroom] = useState(null);
             const [isAdminMode, setIsAdminMode] = useState(false);
             const inputRefs = useRef({});
+
+            // 新增：暫存輸入狀態
+            const [helperClassName, setHelperClassName] = useState('');
+            const [helperStudentList, setHelperStudentList] = useState('');
 
             const duplicateNumbers = useMemo(() => {
                 const counts = {};
@@ -403,7 +426,42 @@
             useEffect(() => {
                 const lines = rosterText.split('\n');
                 const newMap = {};
-                lines.forEach(line => { const parts = line.trim().split(/[\t,，\s]+/); if (parts.length >= 2) newMap[parts[0]] = parts[1]; });
+                let currentClass = null;
+
+                lines.forEach(line => {
+                    const trimmedLine = line.trim();
+                    if (!trimmedLine) return;
+
+                    const parts = trimmedLine.split(/[\t,，\s]+/);
+
+                    if (parts.length === 1) {
+                        currentClass = parts[0];
+                    } else if (parts.length >= 2) {
+                        const seatPart = parts[0]; 
+                        const namePart = parts[1]; 
+                        
+                        let uniqueId = seatPart;
+                        let className = null;
+
+                        const isPureNumber = /^\d+$/.test(seatPart);
+                        
+                        if (currentClass && isPureNumber) {
+                            uniqueId = `${currentClass}-${seatPart}`;
+                            className = currentClass;
+                        } else if (seatPart.includes('-')) {
+                            const splitId = seatPart.split('-');
+                            className = splitId[0];
+                        } else if (currentClass) {
+                             uniqueId = `${currentClass}-${seatPart}`;
+                             className = currentClass;
+                        }
+
+                        newMap[uniqueId] = {
+                            name: namePart,
+                            className: className
+                        };
+                    }
+                });
                 setRosterMap(newMap);
             }, [rosterText]);
 
@@ -475,32 +533,69 @@
                         shouldAttend++;
                         if (seat.status !== 'absent') actualAttend++;
                         else {
-                            const name = rosterMap[seat.number] || '';
+                            const studentData = rosterMap[seat.number];
+                            const name = studentData?.name || '';
+                            const className = studentData?.className ? `(${studentData.className})` : '';
                             const reason = seat.reason || '缺考'; 
                             absentList.push({
-                                text: `${seat.number} ${name}`,
+                                text: `${seat.number} ${name} ${className}`,
                                 reason: reason,
-                                num: parseInt(seat.number) || 0
+                                num: seat.number
                             });
                         }
                     }
                 });
-                absentList.sort((a, b) => a.num - b.num);
+                absentList.sort((a, b) => a.num.localeCompare(b.num));
                 return { shouldAttend, actualAttend, absentList };
             })();
 
-            const updateSeatNumber = (r, c, val) => {
+            // 修改：支援雙欄位更新 (班級, 座號)
+            const updateSeatNumber = (r, c, type, value) => {
                 const key = `${r}-${c}`;
-                setSeats(prev => ({ ...prev, [key]: { ...prev[key], number: val, status: val ? 'present' : 'empty' } }));
+                const currentSeat = seats[key] || { number: '', status: 'empty' };
+                const currentVal = currentSeat.number || '';
+                
+                // 解析當前的值
+                let [currentClass, currentNum] = currentVal.includes('-') 
+                    ? currentVal.split('-') 
+                    : ['', currentVal];
+                
+                // 如果目前值看起來不包含橫線，但其實是座號部分
+                if (!currentVal.includes('-')) {
+                    currentNum = currentVal;
+                    currentClass = '';
+                }
+
+                let newClass = currentClass;
+                let newNum = currentNum;
+
+                if (type === 'class') newClass = value.trim();
+                if (type === 'seat') newNum = value.trim();
+
+                // 重新組合
+                let newVal = '';
+                if (newClass && newNum) {
+                    newVal = `${newClass}-${newNum}`;
+                } else if (newNum) {
+                    newVal = newNum;
+                } else if (newClass) {
+                     if (newClass) newVal = `${newClass}-`; // 暫存狀態
+                }
+
+                // 修正中間狀態邏輯：
+                if (newClass && !newNum) newVal = `${newClass}-`;
+                else if (!newClass && newNum) newVal = newNum;
+                else if (newClass && newNum) newVal = `${newClass}-${newNum}`;
+                else newVal = '';
+
+                setSeats(prev => ({ ...prev, [key]: { ...prev[key], number: newVal, status: newVal ? 'present' : 'empty' } }));
             };
 
-            // 修正：使用 null 代替 undefined 避免 Firestore 錯誤
             const toggleSeatStatus = (r, c) => {
                 const key = `${r}-${c}`;
                 const current = seats[key];
                 if (!current || !current.number) return;
                 const newStatus = current.status === 'present' ? 'absent' : 'present';
-                // Change undefined to null
                 const newReason = newStatus === 'absent' ? '缺考' : null; 
                 setSeats(prev => ({
                     ...prev,
@@ -518,15 +613,49 @@
 
             const handleDeleteSchedule = (idx) => { if (window.confirm('刪除此考程？')) setSchedule(schedule.filter((_, i) => i !== idx)); };
 
-            const handleKeyDown = (e, r, c) => {
+            const handleKeyDown = (e, r, c, type) => {
                 let targetR = r; let targetC = c;
+                if (e.key === 'Enter') {
+                    if (type === 'class') {
+                         // Focus seat input logic here if needed
+                    }
+                }
+
                 if (e.key === 'ArrowUp') targetR = Math.max(0, r - 1);
                 else if (e.key === 'ArrowDown') targetR = Math.min(config.rows - 1, r + 1);
                 else if (e.key === 'ArrowLeft') targetC = Math.max(0, c - 1);
                 else if (e.key === 'ArrowRight') targetC = Math.min(config.cols - 1, c + 1);
                 else return;
-                const targetKey = `${targetR}-${targetC}`;
-                if (inputRefs.current[targetKey]) { e.preventDefault(); inputRefs.current[targetKey].focus(); }
+                
+                const targetKey = `${targetR}-${targetC}-seat`; // Focus seat input
+                if (inputRefs.current[targetKey]) { 
+                    e.preventDefault(); 
+                    inputRefs.current[targetKey].focus(); 
+                }
+            };
+
+            // 新增功能：將 helper 輸入內容加入主名單
+            const handleAddClassToRoster = () => {
+                if (!helperStudentList.trim()) return;
+                
+                let newText = rosterText.trim();
+                // 確保與前文有換行
+                if (newText) newText += '\n\n';
+                
+                // 如果有輸入班級名稱，先加名稱
+                if (helperClassName.trim()) {
+                    newText += `${helperClassName.trim()}\n`;
+                }
+                
+                // 加上名單
+                newText += helperStudentList.trim();
+                
+                setRosterText(newText);
+                setHelperClassName('');
+                setHelperStudentList('');
+                
+                // 簡單提示
+                // alert(`已將 ${helperClassName || '新名單'} 加入下方總表`);
             };
 
             // Filtered Schedule Logic
@@ -582,7 +711,6 @@
                                         {mode === 'edit' ? (
                                             <input type="date" className="bg-white text-indigo-900 text-lg font-bold rounded px-2 py-0.5 outline-none border-2 border-indigo-400 select-text cursor-pointer text-center" value={config.date} onChange={(e) => setConfig({...config, date: e.target.value})} />
                                         ) : (
-                                            // Increase size significantly
                                             <div className="text-4xl md:text-5xl font-bold text-white tracking-wide whitespace-nowrap">{formatDate(config.date)}</div>
                                         )}
                                     </div>
@@ -599,7 +727,6 @@
                                 <div className="bg-indigo-900 rounded-lg border-b-8 border-indigo-950 shadow-lg flex flex-col justify-center px-4 text-white relative overflow-hidden border border-indigo-700">
                                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-transparent opacity-20 pointer-events-none" style={{backgroundSize: '100% 4px'}}></div>
                                     <div className="flex flex-col items-center justify-center">
-                                        {/* Increase size significantly */}
                                         <div className="text-6xl md:text-8xl font-black tabular-nums tracking-tight text-cyan-300 drop-shadow-[0_0_8px_rgba(103,232,249,0.6)] leading-none">
                                             {currentTime.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })}
                                         </div>
@@ -614,22 +741,59 @@
                                         Array.from({ length: config.cols }).map((_, c) => {
                                             const key = `${r}-${c}`;
                                             const seat = seats[key] || { number: '', status: 'empty' };
-                                            const studentName = rosterMap[seat.number] || '';
+                                            const studentData = rosterMap[seat.number];
+                                            const studentName = studentData?.name || '';
+                                            const className = studentData?.className || '';
+                                            
                                             const isAbsent = seat.status === 'absent';
                                             const isDuplicate = seat.number && duplicateNumbers.has(seat.number);
+
+                                            // Helper for edit inputs
+                                            const [editClass, editSeat] = seat.number.includes('-') 
+                                                ? seat.number.split('-') 
+                                                : ['', seat.number];
 
                                             return (
                                                 <div key={key} onClick={() => mode === 'view' && toggleSeatStatus(r, c)} className={`relative w-full h-full p-1 rounded border-b-4 transition-all flex flex-col items-center justify-center shadow-lg select-none ${!seat.number ? 'bg-slate-700 border-slate-900 opacity-30' : ''} ${seat.number && !isAbsent && !isDuplicate ? 'bg-slate-100 border-slate-300 text-slate-900 hover:bg-white cursor-pointer' : ''} ${isDuplicate ? 'bg-red-100 border-red-500 text-red-900 ring-2 ring-red-500' : ''} ${isAbsent ? 'bg-red-500 border-red-700 text-white hover:bg-red-400 cursor-pointer' : ''}`}>
                                                     {mode === 'edit' ? (
-                                                        <input ref={el => inputRefs.current[key] = el} type="text" className={`w-full text-center bg-transparent outline-none font-bold text-3xl md:text-5xl border-b border-gray-400/50 focus:border-blue-500 p-0 select-text ${isDuplicate ? 'text-red-600 border-red-400' : 'text-inherit'}`} value={seat.number} onChange={(e) => updateSeatNumber(r, c, e.target.value)} onKeyDown={(e) => handleKeyDown(e, r, c)} />
+                                                        <div className="flex flex-col w-full h-full items-center justify-center gap-1">
+                                                            {/* 欄位 1: 班級 (選填) */}
+                                                            <input 
+                                                                type="text"
+                                                                placeholder="班級"
+                                                                className={`w-full text-center bg-transparent outline-none text-xs md:text-sm font-bold p-0 placeholder-gray-500 transition-colors ${editClass ? 'text-blue-400' : 'text-gray-500'}`}
+                                                                value={editClass}
+                                                                onChange={(e) => updateSeatNumber(r, c, 'class', e.target.value)}
+                                                                onKeyDown={(e) => handleKeyDown(e, r, c, 'class')}
+                                                            />
+                                                            {/* 欄位 2: 座號 (必填) */}
+                                                            <input 
+                                                                ref={el => inputRefs.current[`${key}-seat`] = el} 
+                                                                type="text"
+                                                                placeholder="座號"
+                                                                className={`w-full text-center bg-transparent outline-none font-bold text-2xl md:text-4xl border-b border-gray-400/50 focus:border-blue-500 p-0 select-text ${isDuplicate ? 'text-red-600 border-red-400' : 'text-white'}`} 
+                                                                value={editSeat} 
+                                                                onChange={(e) => updateSeatNumber(r, c, 'seat', e.target.value)} 
+                                                                onKeyDown={(e) => handleKeyDown(e, r, c, 'seat')} 
+                                                            />
+                                                        </div>
                                                     ) : (
-                                                        <div className="text-3xl md:text-6xl font-black tracking-tighter leading-none">{seat.number}</div>
+                                                        <>
+                                                            <div className="text-3xl md:text-6xl font-black tracking-tighter leading-none">
+                                                                {seat.number.includes('-') ? seat.number.split('-')[1] : seat.number}
+                                                            </div>
+                                                            {className && (
+                                                                <div className={`absolute top-1 left-1 class-badge ${isAbsent ? 'bg-white text-red-500' : 'bg-slate-800 text-white'}`}>
+                                                                    {className}
+                                                                </div>
+                                                            )}
+                                                        </>
                                                     )}
                                                     {seat.number && (
                                                         <div className={`text-sm md:text-xl font-bold truncate w-full text-center px-0.5 leading-tight mt-1 ${isAbsent ? 'text-red-100' : isDuplicate ? 'text-red-600' : 'text-slate-600'}`}>{studentName || (mode === 'edit' ? '' : '')}</div>
                                                     )}
                                                     
-                                                    {/* 缺考原因選單 (僅在監考模式且缺考時顯示) */}
+                                                    {/* 缺考原因選單 */}
                                                     {isAbsent && mode === 'view' && (
                                                         <div className="absolute top-1 right-1 z-20" onClick={(e) => e.stopPropagation()}>
                                                             <select 
@@ -666,40 +830,30 @@
                                             const isTop = idx === 0;
                                             const isNextTwo = idx === 1 || idx === 2;
                                             
-                                            // 基礎樣式
                                             let containerClass = "rounded-lg border-2 flex items-center transition-all duration-500";
                                             let timeClass = "font-mono font-bold";
                                             let subjectClass = "font-bold ml-auto";
                                             
                                             if (mode === 'view') {
                                                 if (isTop) {
-                                                    // 階層 1: 當前/即將開始 (最大)
-                                                    // 簡潔設計：移除粗邊框、陰影、縮放
                                                     containerClass += " flex-[3] flex-col justify-center items-center text-center mb-4 p-6 rounded-3xl";
                                                     if (status === 'current') {
-                                                        // 當前：白底黑字，極簡高對比
                                                         containerClass += " bg-white text-black";
                                                     } else {
-                                                        // 準備中：淡色背景
                                                         containerClass += " bg-white/90 text-gray-600";
                                                     }
-                                                    // 時間：大字體，單行
                                                     timeClass += " text-3xl md:text-5xl font-bold tracking-tight leading-none mb-4"; 
-                                                    // 科目：特大字體
                                                     subjectClass += " text-6xl md:text-8xl font-black leading-none ml-0"; 
                                                 } else if (isNextTwo) {
-                                                    // 階層 2: 接下來兩科 (中)
                                                     containerClass += " flex-1 px-4 py-2 bg-white/90 border-gray-200 text-gray-600";
                                                     timeClass += " text-xl";
                                                     subjectClass += " text-2xl";
                                                 } else {
-                                                    // 階層 3: 其他 (小)
                                                     containerClass += " flex-none px-4 py-1 bg-white/50 border-transparent text-gray-400 scale-95 origin-left";
                                                     timeClass += " text-sm";
                                                     subjectClass += " text-base";
                                                 }
                                             } else {
-                                                // 編輯模式: 統一大小
                                                 containerClass += " p-4 bg-white border-amber-100 text-gray-500";
                                                 timeClass += " text-xl";
                                                 subjectClass += " text-2xl";
@@ -743,7 +897,7 @@
                                         {stats.absentList.length > 0 ? (
                                             stats.absentList.map((student, idx) => (
                                                 <span key={idx} className="text-sm font-bold whitespace-nowrap">
-                                                    {student.num} {student.text.split(' ')[1]}<span className="text-xs ml-0.5 opacity-80">({student.reason})</span>
+                                                    {student.text}<span className="text-xs ml-0.5 opacity-80">({student.reason})</span>
                                                 </span>
                                             ))
                                         ) : '無 (NONE)'}
@@ -760,7 +914,70 @@
                                 <div className="overflow-y-auto flex-1 space-y-6 pr-2">
                                     <section className="bg-blue-50 p-4 rounded-lg border border-blue-100"><h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><Icon name="cloud" className="text-blue-600" /> 雲端資料同步 (Firebase)</h3>{isFirebaseConfigured ? (<><p className="text-sm text-blue-600 mb-3">資料將自動儲存在您的 Firebase 帳號下。</p><button onClick={saveToCloud} disabled={syncStatus === 'saving'} className="flex-1 bg-blue-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-blue-700 disabled:opacity-50"><Icon name="cloud-upload" size={18} />{syncStatus === 'saving' ? '儲存中...' : '手動儲存目前設定'}</button></>) : <p className="text-sm text-red-600">尚未設定 Firebase Config。</p>}</section>
                                     <section className="bg-gray-50 p-4 rounded-lg"><h3 className="font-bold text-gray-700 mb-2">A. 座位排列</h3><div className="flex gap-4"><div className="flex flex-col gap-1"><label className="text-sm text-gray-500">列數</label><div className="flex items-center gap-2"><button onClick={() => setConfig({...config, rows: Math.max(1, config.rows - 1)})} className="p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 active:scale-95 transition-all"><Icon name="minus" size={18}/></button><input type="number" className="w-16 text-center border rounded p-1 text-black font-bold" value={config.rows} onChange={(e) => setConfig({...config, rows: parseInt(e.target.value) || 1})} /><button onClick={() => setConfig({...config, rows: config.rows + 1})} className="p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 active:scale-95 transition-all"><Icon name="plus" size={18}/></button></div></div><div className="flex flex-col gap-1"><label className="text-sm text-gray-500">行數</label><div className="flex items-center gap-2"><button onClick={() => setConfig({...config, cols: Math.max(1, config.cols - 1)})} className="p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 active:scale-95 transition-all"><Icon name="minus" size={18}/></button><input type="number" className="w-16 text-center border rounded p-1 text-black font-bold" value={config.cols} onChange={(e) => setConfig({...config, cols: parseInt(e.target.value) || 1})} /><button onClick={() => setConfig({...config, cols: config.cols + 1})} className="p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 active:scale-95 transition-all"><Icon name="plus" size={18}/></button></div></div></div></section>
-                                    <section><h3 className="font-bold text-gray-700 mb-2 border-l-4 border-green-500 pl-2">B. 班級名單</h3><div className="mb-2 space-y-4"><div className="bg-gray-50 p-3 rounded-lg"><label className="text-sm font-bold text-gray-600 block mb-1">方法 1: Excel 貼上</label><textarea className="w-full h-32 p-3 border rounded font-mono text-sm bg-white focus:ring-2 focus:ring-green-500 outline-none text-gray-800 select-text" placeholder="[座號] [姓名]" value={rosterText} onChange={(e) => setRosterText(e.target.value)} /></div><div className="bg-gray-50 p-3 rounded-lg"><label className="text-sm font-bold text-gray-600 block mb-1 flex items-center gap-1"><Icon name="file-spreadsheet" size={16} /> 方法 2: Google CSV</label><div className="flex gap-2"><input type="text" className="flex-1 border rounded px-3 py-2 text-sm select-text" placeholder="CSV 連結" value={csvUrl} onChange={(e) => setCsvUrl(e.target.value)} /><button onClick={handleCsvImport} className="bg-green-600 text-white px-3 py-2 rounded text-sm whitespace-nowrap hover:bg-green-700">讀取</button></div></div></div></section>
+                                    
+                                    <section>
+                                        <h3 className="font-bold text-gray-700 mb-2 border-l-4 border-green-500 pl-2">B. 班級名單</h3>
+                                        <div className="mb-2 space-y-4">
+                                            {/* 新增：快速新增精靈 */}
+                                            <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100 mb-3">
+                                                <label className="font-bold text-indigo-800 mb-2 block flex items-center gap-2">
+                                                    <Icon name="wand-2" size={16} /> 快速新增班級 (Class Generator)
+                                                </label>
+                                                <div className="flex gap-2 mb-2">
+                                                    <div className="flex-1">
+                                                        <input 
+                                                            type="text" 
+                                                            className="w-full border border-indigo-200 rounded px-3 py-2 text-sm text-black placeholder-gray-400 focus:outline-none focus:border-indigo-500"
+                                                            placeholder="班級名稱 (例如: 301, 高一仁...)" 
+                                                            value={helperClassName}
+                                                            onChange={(e) => setHelperClassName(e.target.value)}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <textarea 
+                                                    className="w-full h-24 p-3 border border-indigo-200 rounded font-mono text-sm bg-white focus:outline-none focus:border-indigo-500 text-gray-800 mb-2 placeholder-gray-400" 
+                                                    placeholder="在此貼上該班的座號與姓名..." 
+                                                    value={helperStudentList} 
+                                                    onChange={(e) => setHelperStudentList(e.target.value)} 
+                                                />
+                                                <button 
+                                                    onClick={handleAddClassToRoster}
+                                                    disabled={!helperStudentList.trim()}
+                                                    className="w-full bg-indigo-600 text-white py-2 rounded text-sm font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm transition-all"
+                                                >
+                                                    <Icon name="plus-circle" size={16} /> 加入到下方總名單
+                                                </button>
+                                            </div>
+
+                                            <div className="relative py-2">
+                                                <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                                                    <div className="w-full border-t border-gray-300"></div>
+                                                </div>
+                                                <div className="relative flex justify-center">
+                                                    <span className="bg-white px-2 text-xs text-gray-400 font-bold">或是直接編輯原始資料 (RAW DATA)</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                                <label className="text-sm font-bold text-gray-600 block mb-1">完整名單內容</label>
+                                                <textarea 
+                                                    className="w-full h-32 p-3 border rounded font-mono text-sm bg-white focus:ring-2 focus:ring-green-500 outline-none text-gray-800 select-text" 
+                                                    placeholder="[班級名稱] (換行) [座號] [姓名]..." 
+                                                    value={rosterText} 
+                                                    onChange={(e) => setRosterText(e.target.value)} 
+                                                />
+                                            </div>
+                                            
+                                            <div className="bg-gray-50 p-3 rounded-lg mt-2">
+                                                <label className="text-sm font-bold text-gray-600 block mb-1 flex items-center gap-1"><Icon name="file-spreadsheet" size={16} /> 方法 2: Google CSV</label>
+                                                <div className="flex gap-2">
+                                                    <input type="text" className="flex-1 border rounded px-3 py-2 text-sm select-text" placeholder="CSV 連結" value={csvUrl} onChange={(e) => setCsvUrl(e.target.value)} />
+                                                    <button onClick={handleCsvImport} className="bg-green-600 text-white px-3 py-2 rounded text-sm whitespace-nowrap hover:bg-green-700">讀取</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </section>
+                                    
                                     <section className="bg-red-50 p-4 rounded-lg border border-red-200 mt-4"><h3 className="font-bold text-red-800 mb-2 flex items-center gap-2"><Icon name="shield-alert" className="text-red-600" /> 管理員專區</h3><p className="text-sm text-red-700 mb-3">此操作將永久刪除當前班級「{activeClassroom}」的所有資料。</p><button onClick={deleteClassroomData} className="w-full bg-red-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-red-700 font-bold"><Icon name="trash-2" size={18} /> 刪除此班級資料</button></section>
                                 </div>
                                 <div className="mt-6 flex justify-between items-center pt-4 border-t"><span className="text-xs text-gray-400">{user ? `ID: ${user.uid.slice(0,8)}...` : '本地模式'}</span><button onClick={() => {saveToCloud(); setShowSettings(false);}} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-lg">儲存並關閉</button></div>
