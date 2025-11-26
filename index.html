@@ -185,10 +185,7 @@
             const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
             const hashArray = Array.from(new Uint8Array(hashBuffer));
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-
-        // --- Components ---
-
+        // 管理者後台
         const AdminPanel = ({ onBack, onEnterClass }) => {
             const [classList, setClassList] = useState([]);
             const [loading, setLoading] = useState(true);
@@ -196,7 +193,9 @@
             const fetchClasses = async () => {
                 if (!db) return;
                 try {
-                    const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data'));
+                    // 修正：加入 'classrooms' 使其成為奇數層級的集合路徑 (5層)
+                    // artifacts(1) / appId(2) / public(3) / data(4) / classrooms(5)
+                    const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classrooms'));
                     const list = [];
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
@@ -223,7 +222,8 @@
             const handleDelete = async (id) => {
                 if (confirm(`確定要永久刪除班級「${id}」嗎？`)) {
                     try {
-                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', id));
+                        // 修正：加入 'classrooms' 使其成為偶數層級的文件路徑 (6層)
+                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', id));
                         setClassList(prev => prev.filter(c => c.id !== id));
                     } catch (error) { alert("刪除失敗"); }
                 }
@@ -370,7 +370,8 @@
                     return;
                 }
                 setSyncStatus('loading');
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', activeClassroom);
+                // 修正：加入 'classrooms'
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', activeClassroom);
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
@@ -416,7 +417,8 @@
                 if (!isFirebaseConfigured || !user) { alert('已儲存至本地 (未設定 Firebase)'); return; }
                 setSyncStatus('saving');
                 try {
-                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', activeClassroom);
+                    // 修正：加入 'classrooms'
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', activeClassroom);
                     await setDoc(docRef, { config, schedule, rosterText, seats, csvUrl, lastUpdated: new Date().toISOString(), updatedBy: user.uid });
                     setSyncStatus('saved');
                     setTimeout(() => setSyncStatus('idle'), 2000);
@@ -429,7 +431,8 @@
                 if (confirmCode === activeClassroom) {
                     try {
                         setSyncStatus('saving');
-                        if (isFirebaseConfigured && user) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', activeClassroom));
+                        // 修正：加入 'classrooms'
+                        if (isFirebaseConfigured && user) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', activeClassroom));
                         localStorage.removeItem(`examMonitorData_${activeClassroom}`);
                         alert('資料已刪除。');
                         setSchedule(DEFAULT_SCHEDULE); setSeats({}); setRosterText(DEFAULT_ROSTER); setActiveClassroom(null);
@@ -703,13 +706,13 @@
                             </div>
 
                             <div className="bg-[#9bbc0f] rounded-xl p-5 pixel-border text-[#0f380f] flex flex-col gap-3 relative border-4 border-gray-700 shrink-0 h-64">
-                                <div className="absolute top-2 right-2 text-xs font-bold opacity-50">Have a nice day!</div>
+                                <div className="absolute top-2 right-2 text-xs font-bold opacity-50">DMG-01</div>
                                 <div className="flex justify-between items-end border-b-2 border-[#0f380f]/30 pb-4 mt-2">
                                     <div className="flex flex-col"><span className="text-sm font-bold mb-1">應到 TOTAL</span><span className="text-6xl font-black leading-none">{stats.shouldAttend}</span></div>
                                     <div className="flex flex-col items-end"><span className="text-sm font-bold mb-1">實到 ACTUAL</span><span className="text-6xl font-black leading-none">{stats.actualAttend}</span></div>
                                 </div>
                                 <div className="flex-1 overflow-y-auto no-scrollbar">
-                                    <div className="flex items-center gap-2 text-sm font-bold mb-2"><Icon name="user-x" size={18} /><span>ABSENT:</span></div>
+                                    <div className="flex items-center gap-2 text-sm font-bold mb-2"><Icon name="user-x" size={18} /><span>缺考 ABSENT:</span></div>
                                     <div className="flex flex-wrap content-start gap-x-3 gap-y-1 h-full">
                                         {stats.absentList.length > 0 ? (
                                             stats.absentList.map((student, idx) => (
