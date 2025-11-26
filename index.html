@@ -664,15 +664,18 @@
                                             if (mode === 'view') {
                                                 if (isTop) {
                                                     // 階層 1: 當前/即將開始 (最大)
-                                                    containerClass += " flex-[2] flex-col justify-center gap-2 text-center mb-2 p-4 rounded-3xl";
+                                                    // 修改：圓角改為 rounded-[2.5rem] (即 rounded-3xl)
+                                                    containerClass += " flex-[3] flex-col justify-center items-center text-center mb-4 p-6 rounded-[2.5rem] border-8";
                                                     if (status === 'current') {
-                                                        containerClass += " bg-yellow-300 border-yellow-500 text-yellow-900 shadow-lg scale-105 z-10";
+                                                        containerClass += " bg-yellow-300 border-yellow-500 text-yellow-950 shadow-2xl scale-105 z-10";
                                                     } else {
                                                         // 準備中 (Next)
                                                         containerClass += " bg-white border-blue-300 text-gray-800 shadow-md";
                                                     }
-                                                    timeClass += " text-5xl md:text-6xl"; // Increase current time
-                                                    subjectClass += " text-6xl md:text-8xl ml-0"; // Increase current subject
+                                                    // 修改：時間字體加大
+                                                    timeClass += " text-4xl md:text-6xl font-black tracking-widest opacity-80 mb-2"; 
+                                                    // 修改：科目字體極大化
+                                                    subjectClass += " text-7xl md:text-9xl font-black leading-none drop-shadow-sm ml-0"; 
                                                 } else if (isNextTwo) {
                                                     // 階層 2: 接下來兩科 (中)
                                                     containerClass += " flex-1 px-4 py-2 bg-white/90 border-gray-200 text-gray-600";
