@@ -73,15 +73,17 @@
             outline: none;
             border-color: #2563eb;
         }
-        /* 班級標籤樣式 */
+        /* 班級標籤樣式 - 優化版 */
         .class-badge {
-            font-size: 0.6rem;
-            line-height: 1;
-            padding: 2px 4px;
-            border-radius: 4px;
-            font-weight: 700;
+            font-size: 0.85rem; /* 加大字體 */
+            line-height: 1.2;
+            padding: 4px 8px;   /* 加大內距 */
+            border-radius: 6px;
+            font-weight: 900;
             letter-spacing: 0.05em;
-            box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+            box-shadow: 2px 2px 3px rgba(0,0,0,0.2);
+            text-shadow: 0px 1px 2px rgba(0,0,0,0.3);
+            z-index: 10;
         }
     </style>
 </head>
@@ -131,6 +133,13 @@
         const ADMIN_HASH = "667d3b4405324cb53a755b5eb6c0d5370322527a32f75964d9a040230d273033";
         const ABSENCE_REASONS = ["缺考", "病假", "事假", "公假", "喪假", "抽離"];
 
+        // 班級顏色池 (去除紅色避免與缺考衝突，去除黃色避免字體不清)
+        const CLASS_COLORS = [
+            'bg-blue-600', 'bg-emerald-600', 'bg-violet-600', 
+            'bg-orange-600', 'bg-pink-600', 'bg-cyan-600', 
+            'bg-fuchsia-600', 'bg-lime-700', 'bg-sky-600', 'bg-indigo-600'
+        ];
+
         const DEFAULT_SCHEDULE = [
             { time: '08:10-09:20', subject: '數學乙' },
             { time: '09:35-10:35', subject: '自習' },
@@ -141,20 +150,31 @@
         ];
 
         // 預設名單包含混合班級範例
-        const DEFAULT_ROSTER = `高一知足
+        const DEFAULT_ROSTER = `[高一知足]
 1\t周恩佑
 2\t林宏燁
 3\t林恩成
-國三感恩
+[國三感恩]
 1\t林晉葳
 2\t林梓軒
-301
+[301]
 01\t張小明
 02\t李大華
-S11
+[S11]
 1\t王小美`;
 
         // --- Helpers ---
+        // 根據班級名稱產生固定的顏色索引
+        const getClassColor = (className) => {
+            if (!className) return 'bg-slate-800';
+            let hash = 0;
+            for (let i = 0; i < className.length; i++) {
+                hash = className.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const index = Math.abs(hash) % CLASS_COLORS.length;
+            return CLASS_COLORS[index];
+        };
+
         const formatDate = (dateStr) => {
             if (!dateStr) return '';
             const date = new Date(dateStr);
@@ -192,7 +212,6 @@ S11
 
         // --- Components ---
 
-        // 新增：管理者面板組件
         const AdminPanel = ({ onBack, onEnterClass }) => {
             const [classList, setClassList] = useState([]);
             const [loading, setLoading] = useState(true);
@@ -200,12 +219,10 @@ S11
             const fetchClasses = async () => {
                 if (!db) return;
                 try {
-                    // 讀取所有 artifacts/{appId}/public/data/classrooms 下的文件
                     const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classrooms'));
                     const list = [];
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
-                        // 簡單過濾，確保有 config 欄位才顯示
                         if (data.config) {
                              list.push({
                                 id: doc.id,
@@ -214,7 +231,6 @@ S11
                             });
                         }
                     });
-                    // 按最後更新時間排序
                     list.sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0));
                     setClassList(list);
                 } catch (error) {
@@ -231,7 +247,6 @@ S11
                 if (confirm(`確定要永久刪除班級「${id}」嗎？`)) {
                     try {
                         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', id));
-                        // 更新列表
                         setClassList(prev => prev.filter(c => c.id !== id));
                     } catch (error) { alert("刪除失敗"); }
                 }
@@ -318,17 +333,14 @@ S11
                 const code = input.trim();
                 if (!code) { setError('請輸入班級名稱'); return; }
                 
-                // 檢查是否為管理員密碼
                 try {
-                    // 優先使用加密檢查 (如果環境支援)
                     if (window.crypto && window.crypto.subtle) {
                         const hash = await sha256(code);
-                        if (hash === ADMIN_HASH) { // 您可能需要更新這個 Hash 如果 Makima777 的 hash 不同，或者直接用字串比對
+                        if (hash === ADMIN_HASH) {
                             onAdminLogin();
                             return;
                         }
                     } else {
-                        // Fallback for insecure context or no crypto
                         if (code === 'Makima777') {
                              onAdminLogin();
                              return;
@@ -336,7 +348,6 @@ S11
                     }
                 } catch (e) {
                     console.warn("Hashing check skipped, using fallback", e);
-                    // 簡單字串比對 Fallback
                     if (code === 'Makima777') {
                          onAdminLogin();
                          return;
@@ -379,14 +390,12 @@ S11
             const [schedule, setSchedule] = useState(DEFAULT_SCHEDULE);
             const [rosterText, setRosterText] = useState(DEFAULT_ROSTER);
             const [rosterMap, setRosterMap] = useState({});
-            // const [csvUrl, setCsvUrl] = useState(''); // 移除 CSV 狀態
             const [seats, setSeats] = useState({});
             const [showSettings, setShowSettings] = useState(false);
             const [activeClassroom, setActiveClassroom] = useState(null);
-            const [isAdminMode, setIsAdminMode] = useState(false); // 新增：管理員模式狀態
+            const [isAdminMode, setIsAdminMode] = useState(false);
             const inputRefs = useRef({});
 
-            // 新增：暫存輸入狀態
             const [helperClassName, setHelperClassName] = useState('');
             const [helperStudentList, setHelperStudentList] = useState('');
 
@@ -441,7 +450,6 @@ S11
                         if (data.schedule) setSchedule(data.schedule);
                         if (data.rosterText) setRosterText(data.rosterText);
                         if (data.seats) setSeats(data.seats);
-                        // if (data.csvUrl) setCsvUrl(data.csvUrl); // 移除 CSV
                         setSyncStatus('idle');
                     } else {
                         const savedLocal = localStorage.getItem(`examMonitorData_${activeClassroom}`);
@@ -461,19 +469,34 @@ S11
             }, [user, activeClassroom]);
 
             useEffect(() => {
+                console.groupCollapsed("📋 名單解析報告 (Roster Parse Report)");
                 const lines = rosterText.split('\n');
                 const newMap = {};
                 let currentClass = null;
+                let studentCount = 0;
 
-                lines.forEach(line => {
+                lines.forEach((line, index) => {
                     const trimmedLine = line.trim();
                     if (!trimmedLine) return;
+
+                    const classMatch = trimmedLine.match(/^\[(.*)\]$/);
+                    if (classMatch) {
+                        currentClass = classMatch[1].trim();
+                        console.log(`✅ 切換班級 (Header): "${currentClass}"`);
+                        return;
+                    }
 
                     const parts = trimmedLine.split(/[\t,，\s]+/);
 
                     if (parts.length === 1) {
-                        currentClass = parts[0];
-                    } else if (parts.length >= 2) {
+                        if (!/^\d+$/.test(parts[0])) {
+                             currentClass = parts[0];
+                             console.log(`✅ 切換班級 (Simple): "${currentClass}"`);
+                             return;
+                        }
+                    }
+
+                    if (parts.length >= 2) {
                         const seatPart = parts[0]; 
                         const namePart = parts[1]; 
                         
@@ -497,8 +520,15 @@ S11
                             name: namePart,
                             className: className
                         };
+                        studentCount++;
+                        if (studentCount < 5 || index > lines.length - 5) {
+                             console.log(`   📍 對應成功: ID [${uniqueId}] -> ${namePart} (${className || '無班級'})`);
+                        }
                     }
                 });
+                console.log(`📊 總計解析學生數: ${studentCount}`);
+                console.log("🔑 所有可用 ID:", Object.keys(newMap));
+                console.groupEnd();
                 setRosterMap(newMap);
             }, [rosterText]);
 
@@ -514,7 +544,6 @@ S11
                 setSyncStatus('saving');
                 try {
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', activeClassroom);
-                    // 移除 csvUrl
                     await setDoc(docRef, { config, schedule, rosterText, seats, lastUpdated: new Date().toISOString(), updatedBy: user.uid });
                     setSyncStatus('saved');
                     setTimeout(() => setSyncStatus('idle'), 2000);
@@ -537,7 +566,6 @@ S11
                 }
             };
 
-            // 新增：清空所有座位功能
             const handleClearSeats = () => {
                 if (confirm('確定要清空所有座位安排嗎？\n\n此動作將移除所有格子內的座號與班級設定，以便重新安排。')) {
                     setSeats({});
@@ -582,18 +610,15 @@ S11
                 return { shouldAttend, actualAttend, absentList };
             })();
 
-            // 修改：支援雙欄位更新 (班級, 座號)
             const updateSeatNumber = (r, c, type, value) => {
                 const key = `${r}-${c}`;
                 const currentSeat = seats[key] || { number: '', status: 'empty' };
                 const currentVal = currentSeat.number || '';
                 
-                // 解析當前的值
                 let [currentClass, currentNum] = currentVal.includes('-') 
                     ? currentVal.split('-') 
                     : ['', currentVal];
                 
-                // 如果目前值看起來不包含橫線，但其實是座號部分
                 if (!currentVal.includes('-')) {
                     currentNum = currentVal;
                     currentClass = '';
@@ -605,17 +630,15 @@ S11
                 if (type === 'class') newClass = value.trim();
                 if (type === 'seat') newNum = value.trim();
 
-                // 重新組合
                 let newVal = '';
                 if (newClass && newNum) {
                     newVal = `${newClass}-${newNum}`;
                 } else if (newNum) {
                     newVal = newNum;
                 } else if (newClass) {
-                     if (newClass) newVal = `${newClass}-`; // 暫存狀態
+                     if (newClass) newVal = `${newClass}-`; 
                 }
 
-                // 修正中間狀態邏輯：
                 if (newClass && !newNum) newVal = `${newClass}-`;
                 else if (!newClass && newNum) newVal = newNum;
                 else if (newClass && newNum) newVal = `${newClass}-${newNum}`;
@@ -650,7 +673,6 @@ S11
                 let targetR = r; let targetC = c;
                 if (e.key === 'Enter') {
                     if (type === 'class') {
-                         // Focus seat input logic here if needed
                     }
                 }
 
@@ -660,27 +682,23 @@ S11
                 else if (e.key === 'ArrowRight') targetC = Math.min(config.cols - 1, c + 1);
                 else return;
                 
-                const targetKey = `${targetR}-${targetC}-seat`; // Focus seat input
+                const targetKey = `${targetR}-${targetC}-seat`; 
                 if (inputRefs.current[targetKey]) { 
                     e.preventDefault(); 
                     inputRefs.current[targetKey].focus(); 
                 }
             };
 
-            // 新增功能：將 helper 輸入內容加入主名單
             const handleAddClassToRoster = () => {
                 if (!helperStudentList.trim()) return;
                 
                 let newText = rosterText.trim();
-                // 確保與前文有換行
                 if (newText) newText += '\n\n';
                 
-                // 如果有輸入班級名稱，先加名稱
                 if (helperClassName.trim()) {
-                    newText += `${helperClassName.trim()}\n`;
+                    newText += `[${helperClassName.trim()}]\n`;
                 }
                 
-                // 加上名單
                 newText += helperStudentList.trim();
                 
                 setRosterText(newText);
@@ -688,7 +706,6 @@ S11
                 setHelperStudentList('');
             };
 
-            // Filtered Schedule Logic
             const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
             const filteredSchedule = useMemo(() => {
                 if (mode === 'edit') return schedule;
@@ -716,7 +733,6 @@ S11
                                 {syncStatus === 'loading' ? <Icon name="refresh-cw" className="animate-spin text-blue-500" size={14} /> : syncStatus === 'saving' ? <Icon name="cloud-upload" className="animate-bounce text-blue-500" size={14} /> : syncStatus === 'saved' ? <Icon name="check" className="text-green-600" size={14} /> : syncStatus === 'error' ? <Icon name="cloud-off" className="text-red-500" size={14} /> : syncStatus === 'not-configured' ? <Icon name="alert-circle" className="text-orange-500" size={14} /> : <Icon name="save" className="text-gray-600" size={14} />}
                                 <span className={`text-xs font-bold ${syncStatus === 'saved' ? 'text-green-700' : 'text-gray-600'}`}>{syncStatus === 'loading' ? '讀取...' : syncStatus === 'saving' ? '儲存中...' : syncStatus === 'saved' ? '已儲存' : syncStatus === 'error' ? '失敗' : syncStatus === 'not-configured' ? '未設定' : '點此存檔'}</span>
                             </button>
-                            {/* 新增：清空所有座位按鈕 (僅在編輯模式顯示) */}
                             {mode === 'edit' && (
                                 <button onClick={handleClearSeats} className="flex items-center gap-2 px-3 py-1 rounded-full border-inner shadow-inner transition-colors bg-red-100 hover:bg-red-200 ml-2" title="清空所有座位">
                                     <Icon name="trash-2" className="text-red-600" size={14} />
@@ -794,7 +810,6 @@ S11
                                                 <div key={key} onClick={() => mode === 'view' && toggleSeatStatus(r, c)} className={`relative w-full h-full p-1 rounded border-b-4 transition-all flex flex-col items-center justify-center shadow-lg select-none ${!seat.number ? 'bg-slate-700 border-slate-900 opacity-30' : ''} ${seat.number && !isAbsent && !isDuplicate ? 'bg-slate-100 border-slate-300 text-slate-900 hover:bg-white cursor-pointer' : ''} ${isDuplicate ? 'bg-red-100 border-red-500 text-red-900 ring-2 ring-red-500' : ''} ${isAbsent ? 'bg-red-500 border-red-700 text-white hover:bg-red-400 cursor-pointer' : ''}`}>
                                                     {mode === 'edit' ? (
                                                         <div className="flex flex-col w-full items-center justify-center gap-1">
-                                                            {/* 欄位 1: 班級 (選填) */}
                                                             <input 
                                                                 type="text"
                                                                 placeholder="班級"
@@ -803,7 +818,6 @@ S11
                                                                 onChange={(e) => updateSeatNumber(r, c, 'class', e.target.value)}
                                                                 onKeyDown={(e) => handleKeyDown(e, r, c, 'class')}
                                                             />
-                                                            {/* 欄位 2: 座號 (必填) */}
                                                             <input 
                                                                 ref={el => inputRefs.current[`${key}-seat`] = el} 
                                                                 type="text"
@@ -819,8 +833,9 @@ S11
                                                             <div className="text-3xl md:text-6xl font-black tracking-tighter leading-none">
                                                                 {seat.number.includes('-') ? seat.number.split('-')[1] : seat.number}
                                                             </div>
+                                                            {/* 班級標籤 - 動態顏色 */}
                                                             {className && (
-                                                                <div className={`absolute top-1 left-1 class-badge ${isAbsent ? 'bg-white text-red-500' : 'bg-slate-800 text-white'}`}>
+                                                                <div className={`absolute top-1 left-1 class-badge ${isAbsent ? 'bg-red-500 text-white' : `${getClassColor(className)} text-white`}`}>
                                                                     {className}
                                                                 </div>
                                                             )}
@@ -830,7 +845,6 @@ S11
                                                         <div className={`text-sm md:text-xl font-bold truncate w-full text-center px-0.5 leading-tight mt-1 ${isAbsent ? 'text-red-100' : isDuplicate ? 'text-red-600' : 'text-slate-600'}`}>{studentName || (mode === 'edit' ? '' : '')}</div>
                                                     )}
                                                     
-                                                    {/* 缺考原因選單 */}
                                                     {isAbsent && mode === 'view' && (
                                                         <div className="absolute top-1 right-1 z-20" onClick={(e) => e.stopPropagation()}>
                                                             <select 
@@ -863,7 +877,6 @@ S11
                                         filteredSchedule.map((item, idx) => {
                                             const status = getScheduleStatus(item.time, currentMinutes);
                                             
-                                            // 決定視覺層級
                                             const isTop = idx === 0;
                                             const isNextTwo = idx === 1 || idx === 2;
                                             
