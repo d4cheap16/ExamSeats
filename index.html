@@ -73,11 +73,11 @@
             outline: none;
             border-color: #2563eb;
         }
-        /* 班級標籤樣式 - 優化版 */
+        /* 班級標籤樣式 - 根據您的設定更新 */
         .class-badge {
-            font-size: 1.7rem; /* 加大字體 */
+            font-size: 1.7rem; /* 已更新：加大字體 */
             line-height: 1.2;
-            padding: 6px 8px;   /* 加大內距 */
+            padding: 6px 8px;   /* 已更新：加大內距 */
             border-radius: 6px;
             font-weight: 900;
             letter-spacing: 0.05em;
@@ -133,7 +133,7 @@
         const ADMIN_HASH = "667d3b4405324cb53a755b5eb6c0d5370322527a32f75964d9a040230d273033";
         const ABSENCE_REASONS = ["缺考", "病假", "事假", "公假", "喪假", "抽離"];
 
-        // 班級顏色池 (去除紅色避免與缺考衝突，去除黃色避免字體不清)
+        // 班級顏色池
         const CLASS_COLORS = [
             'bg-blue-600', 'bg-emerald-600', 'bg-violet-600', 
             'bg-orange-600', 'bg-pink-600', 'bg-cyan-600', 
@@ -149,7 +149,6 @@
             { time: '16:00-17:10', subject: '公民' },
         ];
 
-        // 預設名單包含混合班級範例
         const DEFAULT_ROSTER = `[高一知足]
 1\t周恩佑
 2\t林宏燁
@@ -164,7 +163,6 @@
 1\t王小美`;
 
         // --- Helpers ---
-        // 根據班級名稱產生固定的顏色索引
         const getClassColor = (className) => {
             if (!className) return 'bg-slate-800';
             let hash = 0;
@@ -328,6 +326,14 @@
             const [input, setInput] = useState('');
             const [error, setError] = useState('');
 
+            // 自動填入最後一次的班級代碼
+            useEffect(() => {
+                const lastId = localStorage.getItem('last_active_classroom');
+                if (lastId) {
+                    setInput(lastId);
+                }
+            }, []);
+
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 const code = input.trim();
@@ -358,6 +364,9 @@
                     setError('班級名稱只能包含中文、英文、數字或底線');
                     return;
                 }
+                
+                // 儲存這次的代碼
+                localStorage.setItem('last_active_classroom', code);
                 onLogin(code);
             };
 
@@ -394,6 +403,8 @@
             const [showSettings, setShowSettings] = useState(false);
             const [activeClassroom, setActiveClassroom] = useState(null);
             const [isAdminMode, setIsAdminMode] = useState(false);
+            // 追蹤資料是否已載入，避免初始化時覆蓋 LocalStorage
+            const [dataLoaded, setDataLoaded] = useState(false);
             const inputRefs = useRef({});
 
             const [helperClassName, setHelperClassName] = useState('');
@@ -423,9 +434,15 @@
                 return () => unsubscribe();
             }, []);
 
+            // 資料讀取邏輯 (Load)
             useEffect(() => {
-                if (!isFirebaseConfigured || !user || !activeClassroom) {
-                    if (!activeClassroom) return;
+                if (!activeClassroom) return;
+                
+                // 重置狀態
+                setDataLoaded(false);
+
+                // 優先嘗試讀取 LocalStorage (確保離線可用)
+                const loadLocal = () => {
                     const savedLocal = localStorage.getItem(`examMonitorData_${activeClassroom}`);
                     if (savedLocal) {
                         try {
@@ -438,8 +455,15 @@
                             if (parsed.seats) setSeats(parsed.seats);
                         } catch(e) {}
                     }
+                    // 標記為已載入，允許開始自動存檔
+                    setDataLoaded(true);
+                };
+
+                if (!isFirebaseConfigured || !user) {
+                    loadLocal();
                     return;
                 }
+
                 setSyncStatus('loading');
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', activeClassroom);
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
@@ -452,6 +476,7 @@
                         if (data.seats) setSeats(data.seats);
                         setSyncStatus('idle');
                     } else {
+                        // 雲端無資料，讀取本地
                         const savedLocal = localStorage.getItem(`examMonitorData_${activeClassroom}`);
                         if (savedLocal) {
                             try {
@@ -464,9 +489,28 @@
                         }
                         setSyncStatus('idle');
                     }
-                }, (error) => { console.error("Sync error", error); setSyncStatus('error'); });
+                    setDataLoaded(true);
+                }, (error) => { 
+                    console.error("Sync error", error); 
+                    setSyncStatus('error');
+                    loadLocal(); // 雲端錯誤時，退回本地
+                });
                 return () => unsubscribe();
             }, [user, activeClassroom]);
+
+            // 自動存檔邏輯 (Auto-Save to LocalStorage)
+            useEffect(() => {
+                if (!activeClassroom || !dataLoaded) return; // 必須在資料載入後才開始監聽變更，避免覆蓋
+
+                const timer = setTimeout(() => {
+                    const dataToSave = { config, schedule, rosterText, seats };
+                    localStorage.setItem(`examMonitorData_${activeClassroom}`, JSON.stringify(dataToSave));
+                    // 可以在這裡加一個 console.log 來 debug，或者加一個小的 UI 提示
+                    // console.log('Auto-saved to localStorage');
+                }, 1000); // 延遲 1 秒存檔，避免頻繁寫入
+
+                return () => clearTimeout(timer);
+            }, [activeClassroom, config, schedule, rosterText, seats, dataLoaded]);
 
             useEffect(() => {
                 console.groupCollapsed("📋 名單解析報告 (Roster Parse Report)");
@@ -539,7 +583,9 @@
 
             const saveToCloud = async () => {
                 if (!activeClassroom) return;
+                // 手動儲存時也一併更新本地
                 localStorage.setItem(`examMonitorData_${activeClassroom}`, JSON.stringify({ config, schedule, rosterText, seats }));
+                
                 if (!isFirebaseConfigured || !user) { alert('已儲存至本地 (未設定 Firebase)'); return; }
                 setSyncStatus('saving');
                 try {
