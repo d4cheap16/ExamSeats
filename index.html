@@ -23,20 +23,16 @@
         .pixel-border {
             box-shadow: 4px 4px 0px 0px rgba(0,0,0,0.3);
         }
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
+        
+        /* 隱藏捲軸但保留捲動功能 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
         }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 4px;
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
         }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #94a3b8;
-            border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #64748b;
-        }
+
         /* 隱藏 number input 的上下箭頭 */
         input[type=number]::-webkit-outer-spin-button,
         input[type=number]::-webkit-inner-spin-button {
@@ -77,6 +73,27 @@
             outline: none;
             border-color: #2563eb;
         }
+        /* Footer 樣式 */
+        .site-footer {
+            width: 100%;
+            padding: 0.5rem;
+            background-color: #0f172a; /* slate-900 match body */
+            color: #64748b; /* slate-500 */
+            font-size: 0.75rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            border-top: 1px solid #1e293b; /* slate-800 */
+            flex-shrink: 0; /* 防止被壓縮 */
+        }
+        .footer-logo {
+            height: 1.2em;
+            width: auto;
+            vertical-align: middle;
+            margin-left: 0.25rem;
+            display: inline-block;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 h-screen w-screen overflow-hidden">
@@ -85,7 +102,7 @@
     <!-- 主程式邏輯 -->
     <script type="text/babel" data-type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-        import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
         import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
         // ==========================================
@@ -119,11 +136,9 @@
         };
 
         // --- Constants ---
-        // 管理員密碼雜湊 (Makima777)
         const ADMIN_HASH = "667d3b4405324cb53a755b5eb6c0d5370322527a32f75964d9a040230d273033";
-        
-        // 缺考原因選項
         const ABSENCE_REASONS = ["缺考", "病假", "事假", "公假", "喪假", "抽離"];
+        const appId = "examseat-508e9";
 
         const DEFAULT_SCHEDULE = [
             { time: '08:10-09:20', subject: '數學乙' },
@@ -149,7 +164,22 @@
             return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
         };
 
-        // SHA-256 Hashing Function
+        const getMinutes = (timeStr) => {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+        };
+
+        const getScheduleStatus = (timeRange, currentMinutes) => {
+            const [start, end] = timeRange.split('-');
+            if (!start || !end) return 'future';
+            const startM = getMinutes(start);
+            const endM = getMinutes(end);
+            
+            if (currentMinutes > endM) return 'past';
+            if (currentMinutes >= startM && currentMinutes <= endM) return 'current';
+            return 'future';
+        };
+
         async function sha256(message) {
             const msgBuffer = new TextEncoder().encode(message);
             const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
@@ -159,7 +189,6 @@
 
         // --- Components ---
 
-        // 管理者後台
         const AdminPanel = ({ onBack, onEnterClass }) => {
             const [classList, setClassList] = useState([]);
             const [loading, setLoading] = useState(true);
@@ -167,15 +196,17 @@
             const fetchClasses = async () => {
                 if (!db) return;
                 try {
-                    const querySnapshot = await getDocs(collection(db, "classrooms"));
+                    const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data'));
                     const list = [];
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
-                        list.push({
-                            id: doc.id,
-                            lastUpdated: data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : '未知',
-                            ...data
-                        });
+                        if (data.config) {
+                             list.push({
+                                id: doc.id,
+                                lastUpdated: data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : '未知',
+                                ...data
+                            });
+                        }
                     });
                     list.sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0));
                     setClassList(list);
@@ -192,7 +223,7 @@
             const handleDelete = async (id) => {
                 if (confirm(`確定要永久刪除班級「${id}」嗎？`)) {
                     try {
-                        await deleteDoc(doc(db, "classrooms", id));
+                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', id));
                         setClassList(prev => prev.filter(c => c.id !== id));
                     } catch (error) { alert("刪除失敗"); }
                 }
@@ -218,7 +249,7 @@
                             ) : classList.length === 0 ? (
                                 <div className="p-8 text-center text-gray-500">無班級資料</div>
                             ) : (
-                                <div className="max-h-[70vh] overflow-y-auto custom-scrollbar">
+                                <div className="max-h-[70vh] overflow-y-auto no-scrollbar">
                                     <table className="w-full text-left border-collapse">
                                         <thead className="bg-slate-900 text-gray-400 sticky top-0 z-10 shadow-md"><tr><th className="p-4 font-bold">班級代碼</th><th className="p-4 font-bold hidden md:table-cell">顯示名稱</th><th className="p-4 font-bold hidden sm:table-cell">最後更新</th><th className="p-4 font-bold text-right">操作</th></tr></thead>
                                         <tbody className="divide-y divide-gray-700">
@@ -243,7 +274,6 @@
             );
         };
 
-        // 登入元件
         const LoginScreen = ({ onLogin, onAdminLogin }) => {
             const [input, setInput] = useState('');
             const [error, setError] = useState('');
@@ -252,18 +282,9 @@
                 e.preventDefault();
                 const code = input.trim();
                 if (!code) { setError('請輸入班級名稱'); return; }
-                
-                // 密碼驗證 (SHA-256)
                 const hash = await sha256(code);
-                if (hash === ADMIN_HASH) {
-                    onAdminLogin();
-                    return;
-                }
-
-                if (!/^[a-zA-Z0-9_\u4e00-\u9fa5]+$/.test(code)) {
-                    setError('班級名稱只能包含中文、英文、數字或底線');
-                    return;
-                }
+                if (hash === ADMIN_HASH) { onAdminLogin(); return; }
+                if (!/^[a-zA-Z0-9_\u4e00-\u9fa5]+$/.test(code)) { setError('班級名稱只能包含中文、英文、數字或底線'); return; }
                 onLogin(code);
             };
 
@@ -283,6 +304,10 @@
                         </form>
                         <div className="mt-8 text-xs text-gray-500 border-t border-gray-700 pt-4"><p>💡 提示：輸入相同的代碼即可在不同電腦同步資料。</p></div>
                     </div>
+                    <footer className="site-footer mt-auto">
+                        <span>Designed by CHENWEI with Gemini</span>
+                        <span className="flex items-center">Gemini<img src="https://d4cheap16.github.io/VoCat/Gemini.png" alt="Google Gemini Logo" className="footer-logo" /></span>
+                    </footer>
                 </div>
             );
         };
@@ -310,8 +335,19 @@
             }, [seats]);
 
             useEffect(() => {
-                if (!isFirebaseConfigured) { setSyncStatus('not-configured'); return; }
-                signInAnonymously(auth).catch((error) => { console.error("Auth Error", error); setSyncStatus('error'); });
+                const initAuth = async () => {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (err) {
+                        console.error("Auth failed", err);
+                        setSyncStatus('error');
+                    }
+                };
+                initAuth();
                 const unsubscribe = onAuthStateChanged(auth, setUser);
                 return () => unsubscribe();
             }, []);
@@ -334,7 +370,7 @@
                     return;
                 }
                 setSyncStatus('loading');
-                const docRef = doc(db, 'classrooms', activeClassroom);
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', activeClassroom);
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
@@ -380,11 +416,11 @@
                 if (!isFirebaseConfigured || !user) { alert('已儲存至本地 (未設定 Firebase)'); return; }
                 setSyncStatus('saving');
                 try {
-                    const docRef = doc(db, 'classrooms', activeClassroom);
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', activeClassroom);
                     await setDoc(docRef, { config, schedule, rosterText, seats, csvUrl, lastUpdated: new Date().toISOString(), updatedBy: user.uid });
                     setSyncStatus('saved');
                     setTimeout(() => setSyncStatus('idle'), 2000);
-                } catch (e) { console.error(e); setSyncStatus('error'); alert('雲端儲存失敗，已存至本地'); }
+                } catch (e) { console.error("Save failed:", e); setSyncStatus('error'); alert(`雲端儲存失敗: ${e.message}\n請檢查 Firebase 規則`); }
             };
 
             const deleteClassroomData = async () => {
@@ -393,7 +429,7 @@
                 if (confirmCode === activeClassroom) {
                     try {
                         setSyncStatus('saving');
-                        if (isFirebaseConfigured && user) await deleteDoc(doc(db, 'classrooms', activeClassroom));
+                        if (isFirebaseConfigured && user) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', activeClassroom));
                         localStorage.removeItem(`examMonitorData_${activeClassroom}`);
                         alert('資料已刪除。');
                         setSchedule(DEFAULT_SCHEDULE); setSeats({}); setRosterText(DEFAULT_ROSTER); setActiveClassroom(null);
@@ -436,7 +472,7 @@
                         if (seat.status !== 'absent') actualAttend++;
                         else {
                             const name = rosterMap[seat.number] || '';
-                            const reason = seat.reason || '缺考'; // 使用儲存的原因或預設
+                            const reason = seat.reason || '缺考'; 
                             absentList.push({
                                 text: `${seat.number} ${name}`,
                                 reason: reason,
@@ -458,18 +494,14 @@
                 const key = `${r}-${c}`;
                 const current = seats[key];
                 if (!current || !current.number) return;
-                
-                // 切換邏輯：出席 <-> 缺席(預設缺考)
                 const newStatus = current.status === 'present' ? 'absent' : 'present';
-                const newReason = newStatus === 'absent' ? '缺考' : undefined; // 重置原因
-                
+                const newReason = newStatus === 'absent' ? '缺考' : undefined; 
                 setSeats(prev => ({
                     ...prev,
                     [key]: { ...current, status: newStatus, reason: newReason }
                 }));
             };
 
-            // 更新缺考原因
             const updateSeatReason = (r, c, newReason) => {
                 const key = `${r}-${c}`;
                 setSeats(prev => ({
@@ -490,6 +522,16 @@
                 const targetKey = `${targetR}-${targetC}`;
                 if (inputRefs.current[targetKey]) { e.preventDefault(); inputRefs.current[targetKey].focus(); }
             };
+
+            // Filtered Schedule Logic
+            const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+            const filteredSchedule = useMemo(() => {
+                if (mode === 'edit') return schedule;
+                return schedule.filter(item => {
+                    const status = getScheduleStatus(item.time, currentMinutes);
+                    return status !== 'past';
+                });
+            }, [schedule, mode, currentMinutes]);
 
             if (isAdminMode) return <AdminPanel onBack={() => setIsAdminMode(false)} onEnterClass={(id) => { setIsAdminMode(false); setActiveClassroom(id); }} />;
             if (!activeClassroom) return <LoginScreen onLogin={setActiveClassroom} onAdminLogin={() => setIsAdminMode(true)} />;
@@ -522,7 +564,7 @@
                     </div>
 
                     {/* Main Content */}
-                    <div className="flex-1 flex w-full overflow-hidden relative p-4 gap-4">
+                    <div className="flex-1 flex w-full overflow-hidden relative p-4 gap-4 pt-8">
                         {/* Left Section */}
                         <div className="flex-1 bg-slate-800 rounded-xl p-2 md:p-4 pixel-border relative flex flex-col border-4 border-gray-700 overflow-hidden">
                             <div className="w-full grid grid-cols-3 gap-4 mb-2 shrink-0 h-24">
@@ -536,7 +578,7 @@
                                     <div className="w-full h-1 bg-gray-700 mt-2 rounded-full overflow-hidden opacity-50"><div className="h-full bg-cyan-400 transition-all duration-1000 ease-linear" style={{ width: `${(currentTime.getSeconds() / 60) * 100}%` }}></div></div>
                                 </div>
                                 {/* Podium */}
-                                <div className="bg-amber-700 text-amber-100 rounded-lg border-b-8 border-amber-900 shadow-lg flex flex-col items-center justify-center relative overflow-hidden group"><div className="absolute top-2 left-3 opacity-30"><Icon name="monitor" size={32}/></div><div className="text-xs md:text-sm opacity-75">PODIUM</div><div className="font-bold text-3xl tracking-[0.5em] ml-4">講 台</div></div>
+                                <div className="bg-amber-700 text-amber-100 rounded-lg border-b-8 border-amber-900 shadow-lg flex flex-col items-center justify-center relative overflow-hidden group"><div className="absolute top-2 left-3 opacity-30"><Icon name="monitor" size={48}/></div></div>
                                 <div className="invisible"></div>
                             </div>
 
@@ -590,35 +632,84 @@
                         <div className="w-96 flex flex-col gap-4 shrink-0 h-full">
                             <div className="bg-amber-50 rounded-xl flex-1 p-4 pixel-border flex flex-col text-slate-800 overflow-hidden border-4 border-gray-700">
                                 <h3 className="font-bold text-xl border-b-4 border-amber-200 pb-2 mb-3 flex items-center gap-2 text-amber-800 shrink-0"><Icon name="calendar" size={24} /> 今日考程</h3>
-                                <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2 pr-1 custom-scrollbar">
-                                    {schedule.map((item, idx) => {
-                                        const active = isCurrentSubject(item.time);
-                                        return (
-                                            <div key={idx} className={`p-4 rounded-lg border-2 flex justify-between items-center transition-all ${active ? 'bg-yellow-200 border-yellow-400 scale-105 shadow-md' : 'bg-white border-amber-100 text-gray-500'}`}>
-                                                {mode === 'edit' ? (
-                                                    <div className="flex gap-1 w-full items-center">
-                                                        <input className="w-24 text-base bg-gray-50 border rounded px-1 py-1 select-text font-bold" value={item.time} onChange={(e) => {const n=[...schedule];n[idx].time=e.target.value;setSchedule(n)}} />
-                                                        <input className="flex-1 text-base bg-gray-50 border rounded px-1 py-1 select-text font-bold" value={item.subject} onChange={(e) => {const n=[...schedule];n[idx].subject=e.target.value;setSchedule(n)}} />
-                                                        <button onClick={() => handleDeleteSchedule(idx)} className="text-red-400 hover:text-red-600 p-1"><Icon name="trash-2" size={18}/></button>
-                                                    </div>
-                                                ) : (
-                                                    <><span className={`font-mono font-bold text-xl ${active ? 'text-yellow-900' : ''}`}>{item.time}</span><span className={`font-bold text-2xl ${active ? 'text-yellow-900' : ''}`}>{item.subject}</span></>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                    {mode === 'edit' && <button onClick={() => setSchedule([...schedule, { time: '00:00-00:00', subject: '科目' }])} className="w-full py-3 border-2 border-dashed border-gray-300 text-gray-400 rounded hover:bg-gray-50 mt-2 text-lg font-bold"><Icon name="plus" size={24} /></button>}
+                                <div className="flex-1 overflow-hidden flex flex-col gap-2 pr-1">
+                                    {filteredSchedule.length > 0 ? (
+                                        filteredSchedule.map((item, idx) => {
+                                            const status = getScheduleStatus(item.time, currentMinutes);
+                                            
+                                            // 決定視覺層級
+                                            const isTop = idx === 0;
+                                            const isNextTwo = idx === 1 || idx === 2;
+                                            
+                                            // 基礎樣式
+                                            let containerClass = "rounded-lg border-2 flex items-center transition-all duration-500";
+                                            let timeClass = "font-mono font-bold";
+                                            let subjectClass = "font-bold ml-auto";
+                                            
+                                            if (mode === 'view') {
+                                                if (isTop) {
+                                                    // 階層 1: 當前/即將開始 (最大)
+                                                    containerClass += " flex-[2] flex-col justify-center gap-2 text-center mb-2 p-4";
+                                                    if (status === 'current') {
+                                                        containerClass += " bg-yellow-300 border-yellow-500 text-yellow-900 shadow-lg scale-105 z-10";
+                                                    } else {
+                                                        // 準備中 (Next)
+                                                        containerClass += " bg-white border-blue-300 text-gray-800 shadow-md";
+                                                    }
+                                                    timeClass += " text-4xl md:text-5xl";
+                                                    subjectClass += " text-5xl md:text-7xl ml-0";
+                                                } else if (isNextTwo) {
+                                                    // 階層 2: 接下來兩科 (中)
+                                                    containerClass += " flex-1 px-4 py-2 bg-white/90 border-gray-200 text-gray-600";
+                                                    timeClass += " text-xl";
+                                                    subjectClass += " text-2xl";
+                                                } else {
+                                                    // 階層 3: 其他 (小)
+                                                    containerClass += " flex-none px-4 py-1 bg-white/50 border-transparent text-gray-400 scale-95 origin-left";
+                                                    timeClass += " text-sm";
+                                                    subjectClass += " text-base";
+                                                }
+                                            } else {
+                                                // 編輯模式: 統一大小
+                                                containerClass += " p-4 bg-white border-amber-100 text-gray-500";
+                                                timeClass += " text-xl";
+                                                subjectClass += " text-2xl";
+                                            }
+
+                                            return (
+                                                <div key={idx} className={containerClass}>
+                                                    {mode === 'edit' ? (
+                                                        <div className="flex gap-1 w-full items-center">
+                                                            <input className="w-24 text-base bg-gray-50 border rounded px-1 py-1 select-text font-bold text-black" value={item.time} onChange={(e) => {const n=[...schedule];n[idx].time=e.target.value;setSchedule(n)}} />
+                                                            <input className="flex-1 text-base bg-gray-50 border rounded px-1 py-1 select-text font-bold text-black" value={item.subject} onChange={(e) => {const n=[...schedule];n[idx].subject=e.target.value;setSchedule(n)}} />
+                                                            <button onClick={() => handleDeleteSchedule(idx)} className="text-red-400 hover:text-red-600 p-1"><Icon name="trash-2" size={18}/></button>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <span className={timeClass}>{item.time}</span>
+                                                            <span className={subjectClass}>{item.subject}</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            );
+                                        })
+                                    ) : (
+                                        <div className="flex-1 flex items-center justify-center text-gray-400 font-bold text-xl border-2 border-dashed border-gray-300 rounded-lg">
+                                            今日考試已結束
+                                        </div>
+                                    )}
+                                    {mode === 'edit' && <button onClick={() => setSchedule([...schedule, { time: '00:00-00:00', subject: '科目' }])} className="w-full py-3 border-2 border-dashed border-gray-300 text-gray-400 rounded hover:bg-gray-50 mt-2 text-lg font-bold flex-shrink-0 h-16"><Icon name="plus" size={24} /></button>}
                                 </div>
                             </div>
 
                             <div className="bg-[#9bbc0f] rounded-xl p-5 pixel-border text-[#0f380f] flex flex-col gap-3 relative border-4 border-gray-700 shrink-0 h-64">
-                                <div className="absolute top-2 right-2 text-xs font-bold opacity-50">DMG-01</div>
+                                <div className="absolute top-2 right-2 text-xs font-bold opacity-50">Have a nice day!</div>
                                 <div className="flex justify-between items-end border-b-2 border-[#0f380f]/30 pb-4 mt-2">
                                     <div className="flex flex-col"><span className="text-sm font-bold mb-1">應到 TOTAL</span><span className="text-6xl font-black leading-none">{stats.shouldAttend}</span></div>
                                     <div className="flex flex-col items-end"><span className="text-sm font-bold mb-1">實到 ACTUAL</span><span className="text-6xl font-black leading-none">{stats.actualAttend}</span></div>
                                 </div>
-                                <div className="flex-1 overflow-y-auto custom-scrollbar">
-                                    <div className="flex items-center gap-2 text-sm font-bold mb-2"><Icon name="user-x" size={18} /><span>缺考 ABSENT:</span></div>
+                                <div className="flex-1 overflow-y-auto no-scrollbar">
+                                    <div className="flex items-center gap-2 text-sm font-bold mb-2"><Icon name="user-x" size={18} /><span>ABSENT:</span></div>
                                     <div className="flex flex-wrap content-start gap-x-3 gap-y-1 h-full">
                                         {stats.absentList.length > 0 ? (
                                             stats.absentList.map((student, idx) => (
@@ -639,7 +730,7 @@
                                 <div className="flex justify-between items-center mb-4"><h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Icon name="settings" className="text-gray-600" /> 考場與資料庫設定</h2><button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-800">✕</button></div>
                                 <div className="overflow-y-auto flex-1 space-y-6 pr-2">
                                     <section className="bg-blue-50 p-4 rounded-lg border border-blue-100"><h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><Icon name="cloud" className="text-blue-600" /> 雲端資料同步 (Firebase)</h3>{isFirebaseConfigured ? (<><p className="text-sm text-blue-600 mb-3">資料將自動儲存在您的 Firebase 帳號下。</p><button onClick={saveToCloud} disabled={syncStatus === 'saving'} className="flex-1 bg-blue-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-blue-700 disabled:opacity-50"><Icon name="cloud-upload" size={18} />{syncStatus === 'saving' ? '儲存中...' : '手動儲存目前設定'}</button></>) : <p className="text-sm text-red-600">尚未設定 Firebase Config。</p>}</section>
-                                    <section className="bg-gray-50 p-4 rounded-lg"><h3 className="font-bold text-gray-700 mb-2">A. 座位排列</h3><div className="flex gap-4"><div className="flex flex-col gap-1"><label className="text-sm text-gray-500">列數</label><div className="flex items-center gap-2"><button onClick={() => setConfig({...config, rows: Math.max(1, config.rows - 1)})} className="p-1 bg-gray-200 rounded"><Icon name="minus" size={16}/></button><input type="number" className="w-16 text-center border rounded p-1" value={config.rows} onChange={(e) => setConfig({...config, rows: parseInt(e.target.value) || 1})} /><button onClick={() => setConfig({...config, rows: config.rows + 1})} className="p-1 bg-gray-200 rounded"><Icon name="plus" size={16}/></button></div></div><div className="flex flex-col gap-1"><label className="text-sm text-gray-500">行數</label><div className="flex items-center gap-2"><button onClick={() => setConfig({...config, cols: Math.max(1, config.cols - 1)})} className="p-1 bg-gray-200 rounded"><Icon name="minus" size={16}/></button><input type="number" className="w-16 text-center border rounded p-1" value={config.cols} onChange={(e) => setConfig({...config, cols: parseInt(e.target.value) || 1})} /><button onClick={() => setConfig({...config, cols: config.cols + 1})} className="p-1 bg-gray-200 rounded"><Icon name="plus" size={16}/></button></div></div></div></section>
+                                    <section className="bg-gray-50 p-4 rounded-lg"><h3 className="font-bold text-gray-700 mb-2">A. 座位排列</h3><div className="flex gap-4"><div className="flex flex-col gap-1"><label className="text-sm text-gray-500">列數</label><div className="flex items-center gap-2"><button onClick={() => setConfig({...config, rows: Math.max(1, config.rows - 1)})} className="p-1 bg-gray-200 rounded"><Icon name="minus" size={16}/></button><input type="number" className="w-16 text-center border rounded p-1 text-black font-bold" value={config.rows} onChange={(e) => setConfig({...config, rows: parseInt(e.target.value) || 1})} /><button onClick={() => setConfig({...config, rows: config.rows + 1})} className="p-1 bg-gray-200 rounded"><Icon name="plus" size={16}/></button></div></div><div className="flex flex-col gap-1"><label className="text-sm text-gray-500">行數</label><div className="flex items-center gap-2"><button onClick={() => setConfig({...config, cols: Math.max(1, config.cols - 1)})} className="p-1 bg-gray-200 rounded"><Icon name="minus" size={16}/></button><input type="number" className="w-16 text-center border rounded p-1 text-black font-bold" value={config.cols} onChange={(e) => setConfig({...config, cols: parseInt(e.target.value) || 1})} /><button onClick={() => setConfig({...config, cols: config.cols + 1})} className="p-1 bg-gray-200 rounded"><Icon name="plus" size={16}/></button></div></div></div></section>
                                     <section><h3 className="font-bold text-gray-700 mb-2 border-l-4 border-green-500 pl-2">B. 班級名單</h3><div className="mb-2 space-y-4"><div className="bg-gray-50 p-3 rounded-lg"><label className="text-sm font-bold text-gray-600 block mb-1">方法 1: Excel 貼上</label><textarea className="w-full h-32 p-3 border rounded font-mono text-sm bg-white focus:ring-2 focus:ring-green-500 outline-none text-gray-800 select-text" placeholder="[座號] [姓名]" value={rosterText} onChange={(e) => setRosterText(e.target.value)} /></div><div className="bg-gray-50 p-3 rounded-lg"><label className="text-sm font-bold text-gray-600 block mb-1 flex items-center gap-1"><Icon name="file-spreadsheet" size={16} /> 方法 2: Google CSV</label><div className="flex gap-2"><input type="text" className="flex-1 border rounded px-3 py-2 text-sm select-text" placeholder="CSV 連結" value={csvUrl} onChange={(e) => setCsvUrl(e.target.value)} /><button onClick={handleCsvImport} className="bg-green-600 text-white px-3 py-2 rounded text-sm whitespace-nowrap hover:bg-green-700">讀取</button></div></div></div></section>
                                     <section className="bg-red-50 p-4 rounded-lg border border-red-200 mt-4"><h3 className="font-bold text-red-800 mb-2 flex items-center gap-2"><Icon name="shield-alert" className="text-red-600" /> 管理員專區</h3><p className="text-sm text-red-700 mb-3">此操作將永久刪除當前班級「{activeClassroom}」的所有資料。</p><button onClick={deleteClassroomData} className="w-full bg-red-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-red-700 font-bold"><Icon name="trash-2" size={18} /> 刪除此班級資料</button></section>
                                 </div>
@@ -647,6 +738,14 @@
                             </div>
                         </div>
                     )}
+                    {/* Footer */}
+                    <footer className="site-footer mt-auto">
+                        <span>Designed by CHENWEI with Gemini</span>
+                        <span className="flex items-center">
+                            Gemini
+                            <img src="https://d4cheap16.github.io/VoCat/Gemini.png" alt="Google Gemini Logo" className="footer-logo" />
+                        </span>
+                    </footer>
                 </div>
             );
         };
