@@ -734,11 +734,11 @@
                             <div className="bg-[#9bbc0f] rounded-xl p-5 pixel-border text-[#0f380f] flex flex-col gap-3 relative border-4 border-gray-700 shrink-0 h-64">
                                 <div className="absolute top-2 right-2 text-xs font-bold opacity-50">DMG-01</div>
                                 <div className="flex justify-between items-end border-b-2 border-[#0f380f]/30 pb-4 mt-2">
-                                    <div className="flex flex-col"><span className="text-sm font-bold mb-1">應到 TOTAL</span><span className="text-6xl font-black leading-none">{stats.shouldAttend}</span></div>
-                                    <div className="flex flex-col items-end"><span className="text-sm font-bold mb-1">實到 ACTUAL</span><span className="text-6xl font-black leading-none">{stats.actualAttend}</span></div>
+                                    <div className="flex flex-col"><span className="text-sm font-bold mb-1">TOTAL</span><span className="text-6xl font-black leading-none">{stats.shouldAttend}</span></div>
+                                    <div className="flex flex-col items-end"><span className="text-sm font-bold mb-1">ACTUAL</span><span className="text-6xl font-black leading-none">{stats.actualAttend}</span></div>
                                 </div>
                                 <div className="flex-1 overflow-y-auto no-scrollbar">
-                                    <div className="flex items-center gap-2 text-sm font-bold mb-2"><Icon name="user-x" size={18} /><span>缺考 ABSENT:</span></div>
+                                    <div className="flex items-center gap-2 text-sm font-bold mb-2"><Icon name="user-x" size={18} /><span>ABSENT:</span></div>
                                     <div className="flex flex-wrap content-start gap-x-3 gap-y-1 h-full">
                                         {stats.absentList.length > 0 ? (
                                             stats.absentList.map((student, idx) => (
