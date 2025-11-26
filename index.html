@@ -47,7 +47,7 @@
             filter: invert(1);
             cursor: pointer;
         }
-        /* 缺考原因下拉選單樣式 */
+        /* 缺考原因下拉選單樣式 - 改為白底黑字 */
         .reason-select {
             appearance: none;
             background-color: white; 
@@ -60,13 +60,14 @@
             padding: 2px 12px 2px 6px;
             border-radius: 4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            /* 箭頭改為黑色 */
             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
             background-position: right 0px center;
             background-repeat: no-repeat;
             background-size: 1.2em 1.2em;
         }
         .reason-select:hover {
-            background-color: #f3f4f6;
+            background-color: #f3f4f6; /* gray-100 */
         }
         .reason-select:focus {
             outline: none;
@@ -191,6 +192,7 @@ S11
 
         // --- Components ---
 
+        // 新增：管理者面板組件
         const AdminPanel = ({ onBack, onEnterClass }) => {
             const [classList, setClassList] = useState([]);
             const [loading, setLoading] = useState(true);
@@ -198,10 +200,12 @@ S11
             const fetchClasses = async () => {
                 if (!db) return;
                 try {
+                    // 讀取所有 artifacts/{appId}/public/data/classrooms 下的文件
                     const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classrooms'));
                     const list = [];
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
+                        // 簡單過濾，確保有 config 欄位才顯示
                         if (data.config) {
                              list.push({
                                 id: doc.id,
@@ -210,6 +214,7 @@ S11
                             });
                         }
                     });
+                    // 按最後更新時間排序
                     list.sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0));
                     setClassList(list);
                 } catch (error) {
@@ -226,6 +231,7 @@ S11
                 if (confirm(`確定要永久刪除班級「${id}」嗎？`)) {
                     try {
                         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', id));
+                        // 更新列表
                         setClassList(prev => prev.filter(c => c.id !== id));
                     } catch (error) { alert("刪除失敗"); }
                 }
@@ -237,23 +243,40 @@ S11
                         <div className="flex justify-between items-center mb-6 bg-red-900/50 p-4 rounded-xl border-l-4 border-red-500">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-red-600 rounded-lg shadow-lg"><Icon name="shield-alert" size={32} className="text-white" /></div>
-                                <div><h1 className="text-2xl font-black tracking-widest text-white">ADMIN DASHBOARD</h1><p className="text-red-200 text-sm">系統管理介面</p></div>
+                                <div>
+                                    <h1 className="text-2xl font-black tracking-widest text-white">ADMIN DASHBOARD</h1>
+                                    <p className="text-red-200 text-sm">系統管理介面</p>
+                                </div>
                             </div>
-                            <button onClick={onBack} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center gap-2 font-bold transition-all"><Icon name="log-out" size={18} /> 登出</button>
+                            <button onClick={onBack} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center gap-2 font-bold transition-all">
+                                <Icon name="log-out" size={18} /> 登出
+                            </button>
                         </div>
+
                         <div className="bg-slate-800 rounded-xl pixel-border border-4 border-gray-700 overflow-hidden shadow-2xl">
                             <div className="p-4 border-b-2 border-gray-700 flex justify-between items-center bg-slate-750">
                                 <h2 className="font-bold text-lg flex items-center gap-2"><Icon name="list" /> 班級列表 ({classList.length})</h2>
                                 <button onClick={fetchClasses} className="p-2 hover:bg-slate-600 rounded-full"><Icon name="refresh-cw" size={18} /></button>
                             </div>
+                            
                             {loading ? (
-                                <div className="p-8 text-center text-gray-400 flex flex-col items-center gap-2"><Icon name="loader-2" className="animate-spin" size={32} />讀取中...</div>
+                                <div className="p-8 text-center text-gray-400 flex flex-col items-center gap-2">
+                                    <Icon name="loader-2" className="animate-spin" size={32} />
+                                    讀取中...
+                                </div>
                             ) : classList.length === 0 ? (
                                 <div className="p-8 text-center text-gray-500">無班級資料</div>
                             ) : (
                                 <div className="max-h-[70vh] overflow-y-auto no-scrollbar">
                                     <table className="w-full text-left border-collapse">
-                                        <thead className="bg-slate-900 text-gray-400 sticky top-0 z-10 shadow-md"><tr><th className="p-4 font-bold">班級代碼</th><th className="p-4 font-bold hidden md:table-cell">顯示名稱</th><th className="p-4 font-bold hidden sm:table-cell">最後更新</th><th className="p-4 font-bold text-right">操作</th></tr></thead>
+                                        <thead className="bg-slate-900 text-gray-400 sticky top-0 z-10 shadow-md">
+                                            <tr>
+                                                <th className="p-4 font-bold">班級代碼</th>
+                                                <th className="p-4 font-bold hidden md:table-cell">顯示名稱</th>
+                                                <th className="p-4 font-bold hidden sm:table-cell">最後更新</th>
+                                                <th className="p-4 font-bold text-right">操作</th>
+                                            </tr>
+                                        </thead>
                                         <tbody className="divide-y divide-gray-700">
                                             {classList.map(cls => (
                                                 <tr key={cls.id} className="hover:bg-slate-700/50 transition-colors">
@@ -261,8 +284,18 @@ S11
                                                     <td className="p-4 text-gray-300 hidden md:table-cell">{cls.config?.systemTitle || '-'}</td>
                                                     <td className="p-4 text-gray-500 text-sm hidden sm:table-cell">{cls.lastUpdated}</td>
                                                     <td className="p-4 text-right space-x-2">
-                                                        <button onClick={() => onEnterClass(cls.id)} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-bold"><Icon name="log-in" size={14} /> 進入</button>
-                                                        <button onClick={() => handleDelete(cls.id)} className="inline-flex items-center gap-1 px-3 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-sm font-bold"><Icon name="trash-2" size={14} /> 刪除</button>
+                                                        <button 
+                                                            onClick={() => onEnterClass(cls.id)}
+                                                            className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-bold"
+                                                        >
+                                                            <Icon name="log-in" size={14} /> 進入
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleDelete(cls.id)}
+                                                            className="inline-flex items-center gap-1 px-3 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-sm font-bold"
+                                                        >
+                                                            <Icon name="trash-2" size={14} /> 刪除
+                                                        </button>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -285,14 +318,17 @@ S11
                 const code = input.trim();
                 if (!code) { setError('請輸入班級名稱'); return; }
                 
+                // 檢查是否為管理員密碼
                 try {
+                    // 優先使用加密檢查 (如果環境支援)
                     if (window.crypto && window.crypto.subtle) {
                         const hash = await sha256(code);
-                        if (hash === ADMIN_HASH) {
+                        if (hash === ADMIN_HASH) { // 您可能需要更新這個 Hash 如果 Makima777 的 hash 不同，或者直接用字串比對
                             onAdminLogin();
                             return;
                         }
                     } else {
+                        // Fallback for insecure context or no crypto
                         if (code === 'Makima777') {
                              onAdminLogin();
                              return;
@@ -300,6 +336,7 @@ S11
                     }
                 } catch (e) {
                     console.warn("Hashing check skipped, using fallback", e);
+                    // 簡單字串比對 Fallback
                     if (code === 'Makima777') {
                          onAdminLogin();
                          return;
@@ -342,11 +379,11 @@ S11
             const [schedule, setSchedule] = useState(DEFAULT_SCHEDULE);
             const [rosterText, setRosterText] = useState(DEFAULT_ROSTER);
             const [rosterMap, setRosterMap] = useState({});
-            const [csvUrl, setCsvUrl] = useState('');
+            // const [csvUrl, setCsvUrl] = useState(''); // 移除 CSV 狀態
             const [seats, setSeats] = useState({});
             const [showSettings, setShowSettings] = useState(false);
             const [activeClassroom, setActiveClassroom] = useState(null);
-            const [isAdminMode, setIsAdminMode] = useState(false);
+            const [isAdminMode, setIsAdminMode] = useState(false); // 新增：管理員模式狀態
             const inputRefs = useRef({});
 
             // 新增：暫存輸入狀態
@@ -404,7 +441,7 @@ S11
                         if (data.schedule) setSchedule(data.schedule);
                         if (data.rosterText) setRosterText(data.rosterText);
                         if (data.seats) setSeats(data.seats);
-                        if (data.csvUrl) setCsvUrl(data.csvUrl);
+                        // if (data.csvUrl) setCsvUrl(data.csvUrl); // 移除 CSV
                         setSyncStatus('idle');
                     } else {
                         const savedLocal = localStorage.getItem(`examMonitorData_${activeClassroom}`);
@@ -477,7 +514,8 @@ S11
                 setSyncStatus('saving');
                 try {
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', activeClassroom);
-                    await setDoc(docRef, { config, schedule, rosterText, seats, csvUrl, lastUpdated: new Date().toISOString(), updatedBy: user.uid });
+                    // 移除 csvUrl
+                    await setDoc(docRef, { config, schedule, rosterText, seats, lastUpdated: new Date().toISOString(), updatedBy: user.uid });
                     setSyncStatus('saved');
                     setTimeout(() => setSyncStatus('idle'), 2000);
                 } catch (e) { console.error("Save failed:", e); setSyncStatus('error'); alert(`雲端儲存失敗: ${e.message}\n請檢查 Firebase 規則`); }
@@ -497,18 +535,6 @@ S11
                         setSchedule(DEFAULT_SCHEDULE); setSeats({}); setRosterText(DEFAULT_ROSTER); setActiveClassroom(null);
                     } catch (e) { console.error(e); alert('刪除失敗'); setSyncStatus('error'); }
                 }
-            };
-
-            const handleCsvImport = async () => {
-                if (!csvUrl) return;
-                try {
-                    setSyncStatus('loading');
-                    const response = await fetch(csvUrl);
-                    const text = await response.text();
-                    setRosterText(text);
-                    setSyncStatus('idle');
-                    alert('匯入成功！');
-                } catch (e) { alert('匯入失敗。'); setSyncStatus('error'); }
             };
 
             const toggleFullScreen = () => {
@@ -653,9 +679,6 @@ S11
                 setRosterText(newText);
                 setHelperClassName('');
                 setHelperStudentList('');
-                
-                // 簡單提示
-                // alert(`已將 ${helperClassName || '新名單'} 加入下方總表`);
             };
 
             // Filtered Schedule Logic
@@ -968,13 +991,6 @@ S11
                                                 />
                                             </div>
                                             
-                                            <div className="bg-gray-50 p-3 rounded-lg mt-2">
-                                                <label className="text-sm font-bold text-gray-600 block mb-1 flex items-center gap-1"><Icon name="file-spreadsheet" size={16} /> 方法 2: Google CSV</label>
-                                                <div className="flex gap-2">
-                                                    <input type="text" className="flex-1 border rounded px-3 py-2 text-sm select-text" placeholder="CSV 連結" value={csvUrl} onChange={(e) => setCsvUrl(e.target.value)} />
-                                                    <button onClick={handleCsvImport} className="bg-green-600 text-white px-3 py-2 rounded text-sm whitespace-nowrap hover:bg-green-700">讀取</button>
-                                                </div>
-                                            </div>
                                         </div>
                                     </section>
                                     
