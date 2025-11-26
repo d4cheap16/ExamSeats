@@ -13,7 +13,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- 載入 Lucide Icons (圖示) - 改用更穩定的指定版本連結 -->
+    <!-- 載入 Lucide Icons (圖示) -->
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 
     <!-- 自定義樣式 -->
@@ -125,11 +125,10 @@
             auth = getAuth(app);
             db = getFirestore(app);
         }
-        const appId = "examseat-508e9"; // 用於資料庫路徑
+        const appId = "examseat-508e9";
 
         const { useState, useEffect, useRef, useMemo } = React;
 
-        // 安全的 Icon 元件，防止因 lucide 載入失敗而崩潰
         const Icon = ({ name, size = 24, className = "" }) => {
             useEffect(() => {
                 if (window.lucide && typeof window.lucide.createIcons === 'function') {
@@ -199,7 +198,6 @@
             const fetchClasses = async () => {
                 if (!db) return;
                 try {
-                    // 路徑：artifacts(1)/appId(2)/public(3)/data(4)/classrooms(5)
                     const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classrooms'));
                     const list = [];
                     querySnapshot.forEach((doc) => {
@@ -227,7 +225,6 @@
             const handleDelete = async (id) => {
                 if (confirm(`確定要永久刪除班級「${id}」嗎？`)) {
                     try {
-                        // 路徑：artifacts(1)/appId(2)/public(3)/data(4)/classrooms(5)/id(6)
                         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', id));
                         setClassList(prev => prev.filter(c => c.id !== id));
                     } catch (error) { alert("刪除失敗"); }
@@ -287,7 +284,6 @@
                 e.preventDefault();
                 const code = input.trim();
                 if (!code) { setError('請輸入班級名稱'); return; }
-                
                 const hash = await sha256(code);
                 if (hash === ADMIN_HASH) { onAdminLogin(); return; }
                 if (!/^[a-zA-Z0-9_\u4e00-\u9fa5]+$/.test(code)) { setError('班級名稱只能包含中文、英文、數字或底線'); return; }
@@ -379,7 +375,6 @@
                     return;
                 }
                 setSyncStatus('loading');
-                // 修正：加入 'classrooms' 使路徑為偶數層級的文件 (artifacts/appId/public/data/classrooms/ID)
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', activeClassroom);
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
@@ -426,7 +421,6 @@
                 if (!isFirebaseConfigured || !user) { alert('已儲存至本地 (未設定 Firebase)'); return; }
                 setSyncStatus('saving');
                 try {
-                    // 修正：加入 'classrooms'
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', activeClassroom);
                     await setDoc(docRef, { config, schedule, rosterText, seats, csvUrl, lastUpdated: new Date().toISOString(), updatedBy: user.uid });
                     setSyncStatus('saved');
@@ -441,7 +435,6 @@
                     try {
                         setSyncStatus('saving');
                         if (isFirebaseConfigured && user) {
-                            // 修正：加入 'classrooms'
                             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', activeClassroom));
                         }
                         localStorage.removeItem(`examMonitorData_${activeClassroom}`);
@@ -581,19 +574,38 @@
                     <div className="flex-1 flex w-full overflow-hidden relative p-4 gap-4 pt-8">
                         {/* Left Section */}
                         <div className="flex-1 bg-slate-800 rounded-xl p-2 md:p-4 pixel-border relative flex flex-col border-4 border-gray-700 overflow-hidden">
+                            {/* Top Bar: Date - Podium - Time */}
                             <div className="w-full grid grid-cols-3 gap-4 mb-2 shrink-0 h-24">
-                                {/* Date & Clock */}
+                                {/* Left: Date */}
                                 <div className="bg-indigo-900 rounded-lg border-b-8 border-indigo-950 shadow-lg flex flex-col justify-center px-4 text-white relative overflow-hidden border border-indigo-700">
                                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-transparent opacity-20 pointer-events-none" style={{backgroundSize: '100% 4px'}}></div>
-                                    <div className="flex items-center justify-between gap-4">
-                                        <div className="flex flex-col items-start"><div className="text-xs text-indigo-300 mb-0.5">DATE</div>{mode === 'edit' ? (<input type="date" className="bg-white text-indigo-900 text-lg font-bold rounded px-2 py-0.5 outline-none border-2 border-indigo-400 select-text cursor-pointer" value={config.date} onChange={(e) => setConfig({...config, date: e.target.value})} />) : (<div className="text-lg md:text-xl font-bold text-white tracking-wide whitespace-nowrap">{formatDate(config.date)}</div>)}</div>
-                                        <div className="flex flex-col items-end"><div className="text-xs text-indigo-300 mb-0.5">TIME</div><div className="text-3xl md:text-5xl font-black tabular-nums tracking-tight text-cyan-300 drop-shadow-[0_0_8px_rgba(103,232,249,0.6)] leading-none">{currentTime.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })}</div></div>
+                                    <div className="flex flex-col items-center justify-center">
+                                        <div className="text-xs text-indigo-300 mb-0.5">DATE</div>
+                                        {mode === 'edit' ? (
+                                            <input type="date" className="bg-white text-indigo-900 text-lg font-bold rounded px-2 py-0.5 outline-none border-2 border-indigo-400 select-text cursor-pointer text-center" value={config.date} onChange={(e) => setConfig({...config, date: e.target.value})} />
+                                        ) : (
+                                            <div className="text-2xl md:text-3xl font-bold text-white tracking-wide whitespace-nowrap">{formatDate(config.date)}</div>
+                                        )}
                                     </div>
-                                    <div className="w-full h-1 bg-gray-700 mt-2 rounded-full overflow-hidden opacity-50"><div className="h-full bg-cyan-400 transition-all duration-1000 ease-linear" style={{ width: `${(currentTime.getSeconds() / 60) * 100}%` }}></div></div>
                                 </div>
-                                {/* Podium */}
-                                <div className="bg-amber-700 text-amber-100 rounded-lg border-b-8 border-amber-900 shadow-lg flex flex-col items-center justify-center relative overflow-hidden group"><div className="absolute top-2 left-3 opacity-30"><Icon name="monitor" size={48}/></div></div>
-                                <div className="invisible"></div>
+
+                                {/* Center: Podium (Icon Only, Centered) */}
+                                <div className="bg-amber-700 text-amber-100 rounded-lg border-b-8 border-amber-900 shadow-lg flex flex-col items-center justify-center relative overflow-hidden group">
+                                    <div className="flex items-center justify-center w-full h-full">
+                                        <Icon name="monitor" size={64} />
+                                    </div>
+                                </div>
+
+                                {/* Right: Time */}
+                                <div className="bg-indigo-900 rounded-lg border-b-8 border-indigo-950 shadow-lg flex flex-col justify-center px-4 text-white relative overflow-hidden border border-indigo-700">
+                                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-transparent opacity-20 pointer-events-none" style={{backgroundSize: '100% 4px'}}></div>
+                                    <div className="flex flex-col items-center justify-center">
+                                        <div className="text-xs text-indigo-300 mb-0.5">TIME</div>
+                                        <div className="text-4xl md:text-6xl font-black tabular-nums tracking-tight text-cyan-300 drop-shadow-[0_0_8px_rgba(103,232,249,0.6)] leading-none">
+                                            {currentTime.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Seat Grid */}
@@ -663,7 +675,7 @@
                                             if (mode === 'view') {
                                                 if (isTop) {
                                                     // 階層 1: 當前/即將開始 (最大)
-                                                    containerClass += " flex-[2] flex-col justify-center gap-2 text-center mb-2 p-4";
+                                                    containerClass += " flex-[2] flex-col justify-center gap-2 text-center mb-2 p-4 rounded-2xl"; // Add rounded-2xl
                                                     if (status === 'current') {
                                                         containerClass += " bg-yellow-300 border-yellow-500 text-yellow-900 shadow-lg scale-105 z-10";
                                                     } else {
@@ -754,7 +766,7 @@
                     )}
                     {/* Footer */}
                     <footer className="site-footer mt-auto">
-                        <span>Designed by CHENWEI with Gemini</span>
+                        <span>Designed by CHENWEI with </span>
                         <span className="flex items-center">
                             Gemini
                             <img src="https://d4cheap16.github.io/VoCat/Gemini.png" alt="Google Gemini Logo" className="footer-logo" />
