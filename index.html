@@ -13,8 +13,8 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- 載入 Lucide Icons (圖示) -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- 載入 Lucide Icons (圖示) - 改用更穩定的指定版本連結 -->
+    <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 
     <!-- 自定義樣式 -->
     <style>
@@ -125,12 +125,16 @@
             auth = getAuth(app);
             db = getFirestore(app);
         }
+        const appId = "examseat-508e9"; // 用於資料庫路徑
 
         const { useState, useEffect, useRef, useMemo } = React;
 
+        // 安全的 Icon 元件，防止因 lucide 載入失敗而崩潰
         const Icon = ({ name, size = 24, className = "" }) => {
             useEffect(() => {
-                if (window.lucide) window.lucide.createIcons();
+                if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                    window.lucide.createIcons();
+                }
             }, [name]);
             return <i data-lucide={name} width={size} height={size} className={className}></i>;
         };
@@ -138,7 +142,6 @@
         // --- Constants ---
         const ADMIN_HASH = "667d3b4405324cb53a755b5eb6c0d5370322527a32f75964d9a040230d273033";
         const ABSENCE_REASONS = ["缺考", "病假", "事假", "公假", "喪假", "抽離"];
-        const appId = "examseat-508e9";
 
         const DEFAULT_SCHEDULE = [
             { time: '08:10-09:20', subject: '數學乙' },
@@ -185,7 +188,10 @@
             const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
             const hashArray = Array.from(new Uint8Array(hashBuffer));
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        // 管理者後台
+        }
+
+        // --- Components ---
+
         const AdminPanel = ({ onBack, onEnterClass }) => {
             const [classList, setClassList] = useState([]);
             const [loading, setLoading] = useState(true);
@@ -193,8 +199,7 @@
             const fetchClasses = async () => {
                 if (!db) return;
                 try {
-                    // 修正：加入 'classrooms' 使其成為奇數層級的集合路徑 (5層)
-                    // artifacts(1) / appId(2) / public(3) / data(4) / classrooms(5)
+                    // 路徑：artifacts(1)/appId(2)/public(3)/data(4)/classrooms(5)
                     const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classrooms'));
                     const list = [];
                     querySnapshot.forEach((doc) => {
@@ -222,7 +227,7 @@
             const handleDelete = async (id) => {
                 if (confirm(`確定要永久刪除班級「${id}」嗎？`)) {
                     try {
-                        // 修正：加入 'classrooms' 使其成為偶數層級的文件路徑 (6層)
+                        // 路徑：artifacts(1)/appId(2)/public(3)/data(4)/classrooms(5)/id(6)
                         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', id));
                         setClassList(prev => prev.filter(c => c.id !== id));
                     } catch (error) { alert("刪除失敗"); }
@@ -282,6 +287,7 @@
                 e.preventDefault();
                 const code = input.trim();
                 if (!code) { setError('請輸入班級名稱'); return; }
+                
                 const hash = await sha256(code);
                 if (hash === ADMIN_HASH) { onAdminLogin(); return; }
                 if (!/^[a-zA-Z0-9_\u4e00-\u9fa5]+$/.test(code)) { setError('班級名稱只能包含中文、英文、數字或底線'); return; }
@@ -306,7 +312,10 @@
                     </div>
                     <footer className="site-footer mt-auto">
                         <span>Designed by CHENWEI with Gemini</span>
-                        <span className="flex items-center">Gemini<img src="https://d4cheap16.github.io/VoCat/Gemini.png" alt="Google Gemini Logo" className="footer-logo" /></span>
+                        <span className="flex items-center">
+                            Gemini
+                            <img src="https://d4cheap16.github.io/VoCat/Gemini.png" alt="Google Gemini Logo" className="footer-logo" />
+                        </span>
                     </footer>
                 </div>
             );
@@ -370,7 +379,7 @@
                     return;
                 }
                 setSyncStatus('loading');
-                // 修正：加入 'classrooms'
+                // 修正：加入 'classrooms' 使路徑為偶數層級的文件 (artifacts/appId/public/data/classrooms/ID)
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', activeClassroom);
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
@@ -431,8 +440,10 @@
                 if (confirmCode === activeClassroom) {
                     try {
                         setSyncStatus('saving');
-                        // 修正：加入 'classrooms'
-                        if (isFirebaseConfigured && user) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', activeClassroom));
+                        if (isFirebaseConfigured && user) {
+                            // 修正：加入 'classrooms'
+                            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', activeClassroom));
+                        }
                         localStorage.removeItem(`examMonitorData_${activeClassroom}`);
                         alert('資料已刪除。');
                         setSchedule(DEFAULT_SCHEDULE); setSeats({}); setRosterText(DEFAULT_ROSTER); setActiveClassroom(null);
@@ -659,8 +670,8 @@
                                                         // 準備中 (Next)
                                                         containerClass += " bg-white border-blue-300 text-gray-800 shadow-md";
                                                     }
-                                                    timeClass += " text-4xl md:text-5xl";
-                                                    subjectClass += " text-5xl md:text-7xl ml-0";
+                                                    timeClass += " text-3xl md:text-4xl"; // 修改：加大時間字體
+                                                    subjectClass += " text-5xl md:text-7xl ml-0"; // 修改：特大科目字體
                                                 } else if (isNextTwo) {
                                                     // 階層 2: 接下來兩科 (中)
                                                     containerClass += " flex-1 px-4 py-2 bg-white/90 border-gray-200 text-gray-600";
