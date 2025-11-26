@@ -579,7 +579,6 @@
                                 <div className="bg-indigo-900 rounded-lg border-b-8 border-indigo-950 shadow-lg flex flex-col justify-center px-4 text-white relative overflow-hidden border border-indigo-700">
                                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-transparent opacity-20 pointer-events-none" style={{backgroundSize: '100% 4px'}}></div>
                                     <div className="flex flex-col items-center justify-center">
-                                        {/* REMOVE DATE LABEL */}
                                         {mode === 'edit' ? (
                                             <input type="date" className="bg-white text-indigo-900 text-lg font-bold rounded px-2 py-0.5 outline-none border-2 border-indigo-400 select-text cursor-pointer text-center" value={config.date} onChange={(e) => setConfig({...config, date: e.target.value})} />
                                         ) : (
@@ -600,7 +599,6 @@
                                 <div className="bg-indigo-900 rounded-lg border-b-8 border-indigo-950 shadow-lg flex flex-col justify-center px-4 text-white relative overflow-hidden border border-indigo-700">
                                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-transparent opacity-20 pointer-events-none" style={{backgroundSize: '100% 4px'}}></div>
                                     <div className="flex flex-col items-center justify-center">
-                                        {/* REMOVE TIME LABEL */}
                                         {/* Increase size significantly */}
                                         <div className="text-6xl md:text-8xl font-black tabular-nums tracking-tight text-cyan-300 drop-shadow-[0_0_8px_rgba(103,232,249,0.6)] leading-none">
                                             {currentTime.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })}
@@ -676,18 +674,19 @@
                                             if (mode === 'view') {
                                                 if (isTop) {
                                                     // 階層 1: 當前/即將開始 (最大)
-                                                    // 修改：圓角改為 rounded-[2.5rem] (即 rounded-3xl)
-                                                    containerClass += " flex-[3] flex-col justify-center items-center text-center mb-4 p-6 rounded-[2.5rem] border-8";
+                                                    // 簡潔設計：移除粗邊框、陰影、縮放
+                                                    containerClass += " flex-[3] flex-col justify-center items-center text-center mb-4 p-6 rounded-3xl";
                                                     if (status === 'current') {
-                                                        containerClass += " bg-white border-yellow-500 text-yellow-950 shadow-2xl scale-105 z-10"; // Simplified colors: White bg
+                                                        // 當前：白底黑字，極簡高對比
+                                                        containerClass += " bg-white text-black";
                                                     } else {
-                                                        // 準備中 (Next)
-                                                        containerClass += " bg-white border-blue-300 text-gray-800 shadow-md";
+                                                        // 準備中：淡色背景
+                                                        containerClass += " bg-white/90 text-gray-600";
                                                     }
-                                                    // 修改：時間字體加大
-                                                    timeClass += " text-4xl md:text-6xl font-black tracking-widest opacity-80 mb-2"; 
-                                                    // 修改：科目字體極大化
-                                                    subjectClass += " text-7xl md:text-9xl font-black leading-none drop-shadow-sm ml-0"; 
+                                                    // 時間：大字體，單行
+                                                    timeClass += " text-5xl md:text-7xl font-bold tracking-tight leading-none mb-4"; 
+                                                    // 科目：特大字體
+                                                    subjectClass += " text-6xl md:text-8xl font-black leading-none ml-0"; 
                                                 } else if (isNextTwo) {
                                                     // 階層 2: 接下來兩科 (中)
                                                     containerClass += " flex-1 px-4 py-2 bg-white/90 border-gray-200 text-gray-600";
