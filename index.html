@@ -265,14 +265,22 @@
                 if (!code) { setError('請輸入班級名稱'); return; }
                 
                 try {
-                    const hash = await sha256(code);
-                    if (hash === ADMIN_HASH) {
-                        onAdminLogin();
-                        return;
+                    // 修正：先嘗試加密，若失敗則直接比對 (Fallback)
+                    if (window.crypto && window.crypto.subtle) {
+                        const hash = await sha256(code);
+                        if (hash === ADMIN_HASH) {
+                            onAdminLogin();
+                            return;
+                        }
+                    } else {
+                        // Fallback for insecure context or no crypto
+                        if (code === 'Makima777') {
+                             onAdminLogin();
+                             return;
+                        }
                     }
                 } catch (e) {
-                    console.error("Hashing failed", e);
-                    // Fallback if hashing fails in insecure context
+                    console.warn("Hashing check skipped, using fallback", e);
                     if (code === 'Makima777') {
                          onAdminLogin();
                          return;
@@ -486,12 +494,14 @@
                 setSeats(prev => ({ ...prev, [key]: { ...prev[key], number: val, status: val ? 'present' : 'empty' } }));
             };
 
+            // 修正：使用 null 代替 undefined 避免 Firestore 錯誤
             const toggleSeatStatus = (r, c) => {
                 const key = `${r}-${c}`;
                 const current = seats[key];
                 if (!current || !current.number) return;
                 const newStatus = current.status === 'present' ? 'absent' : 'present';
-                const newReason = newStatus === 'absent' ? '缺考' : undefined; 
+                // Change undefined to null
+                const newReason = newStatus === 'absent' ? '缺考' : null; 
                 setSeats(prev => ({
                     ...prev,
                     [key]: { ...current, status: newStatus, reason: newReason }
@@ -569,6 +579,7 @@
                                 <div className="bg-indigo-900 rounded-lg border-b-8 border-indigo-950 shadow-lg flex flex-col justify-center px-4 text-white relative overflow-hidden border border-indigo-700">
                                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-transparent opacity-20 pointer-events-none" style={{backgroundSize: '100% 4px'}}></div>
                                     <div className="flex flex-col items-center justify-center">
+                                        {/* REMOVE DATE LABEL */}
                                         {mode === 'edit' ? (
                                             <input type="date" className="bg-white text-indigo-900 text-lg font-bold rounded px-2 py-0.5 outline-none border-2 border-indigo-400 select-text cursor-pointer text-center" value={config.date} onChange={(e) => setConfig({...config, date: e.target.value})} />
                                         ) : (
@@ -589,6 +600,7 @@
                                 <div className="bg-indigo-900 rounded-lg border-b-8 border-indigo-950 shadow-lg flex flex-col justify-center px-4 text-white relative overflow-hidden border border-indigo-700">
                                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-transparent opacity-20 pointer-events-none" style={{backgroundSize: '100% 4px'}}></div>
                                     <div className="flex flex-col items-center justify-center">
+                                        {/* REMOVE TIME LABEL */}
                                         {/* Increase size significantly */}
                                         <div className="text-6xl md:text-8xl font-black tabular-nums tracking-tight text-cyan-300 drop-shadow-[0_0_8px_rgba(103,232,249,0.6)] leading-none">
                                             {currentTime.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })}
@@ -667,7 +679,7 @@
                                                     // 修改：圓角改為 rounded-[2.5rem] (即 rounded-3xl)
                                                     containerClass += " flex-[3] flex-col justify-center items-center text-center mb-4 p-6 rounded-[2.5rem] border-8";
                                                     if (status === 'current') {
-                                                        containerClass += " bg-yellow-300 border-yellow-500 text-yellow-950 shadow-2xl scale-105 z-10";
+                                                        containerClass += " bg-white border-yellow-500 text-yellow-950 shadow-2xl scale-105 z-10"; // Simplified colors: White bg
                                                     } else {
                                                         // 準備中 (Next)
                                                         containerClass += " bg-white border-blue-300 text-gray-800 shadow-md";
