@@ -399,6 +399,7 @@
             const [schedule, setSchedule] = useState(DEFAULT_SCHEDULE);
             const [rosterText, setRosterText] = useState(DEFAULT_ROSTER);
             const [rosterMap, setRosterMap] = useState({});
+            const [availableClasses, setAvailableClasses] = useState([]); // 新增：可用班級清單
             const [seats, setSeats] = useState({});
             const [showSettings, setShowSettings] = useState(false);
             const [activeClassroom, setActiveClassroom] = useState(null);
@@ -516,6 +517,7 @@
                 console.groupCollapsed("📋 名單解析報告 (Roster Parse Report)");
                 const lines = rosterText.split('\n');
                 const newMap = {};
+                const foundClasses = new Set(); // 收集所有發現的班級
                 let currentClass = null;
                 let studentCount = 0;
 
@@ -526,6 +528,7 @@
                     const classMatch = trimmedLine.match(/^\[(.*)\]$/);
                     if (classMatch) {
                         currentClass = classMatch[1].trim();
+                        foundClasses.add(currentClass); // 記錄班級
                         console.log(`✅ 切換班級 (Header): "${currentClass}"`);
                         return;
                     }
@@ -535,6 +538,7 @@
                     if (parts.length === 1) {
                         if (!/^\d+$/.test(parts[0])) {
                              currentClass = parts[0];
+                             foundClasses.add(currentClass); // 記錄班級
                              console.log(`✅ 切換班級 (Simple): "${currentClass}"`);
                              return;
                         }
@@ -574,6 +578,8 @@
                 console.log("🔑 所有可用 ID:", Object.keys(newMap));
                 console.groupEnd();
                 setRosterMap(newMap);
+                // 將 Set 轉為 Array 並排序，更新可用班級清單
+                setAvailableClasses(Array.from(foundClasses).sort());
             }, [rosterText]);
 
             useEffect(() => {
@@ -767,6 +773,9 @@
                 });
             }, [schedule, mode, currentMinutes]);
 
+            // 計算 Default Class 是否合法
+            const isClassValid = !config.defaultClass || availableClasses.includes(config.defaultClass);
+
             if (isAdminMode) return <AdminPanel onBack={() => setIsAdminMode(false)} onEnterClass={(id) => { setIsAdminMode(false); setActiveClassroom(id); }} />;
             if (!activeClassroom) return <LoginScreen onLogin={setActiveClassroom} onAdminLogin={() => setIsAdminMode(true)} />;
 
@@ -779,16 +788,27 @@
                             {mode === 'edit' ? (
                                 <>
                                     <input type="text" className="font-black text-xl tracking-widest text-gray-700 bg-transparent border-b-2 border-gray-500 outline-none hidden md:block placeholder-gray-400 w-64 select-text" value={config.systemTitle || ''} placeholder="請輸入班級名稱" onChange={(e) => setConfig({...config, systemTitle: e.target.value})} />
-                                    <div className="hidden md:flex items-center gap-2 ml-2 border-l pl-4 border-gray-400">
+                                    <div className="hidden md:flex items-center gap-2 ml-2 border-l pl-4 border-gray-400 relative">
                                         <span className="text-xs font-bold text-gray-500">預設班級:</span>
-                                        <input 
-                                            type="text" 
-                                            className="w-20 bg-white border border-gray-300 rounded px-2 py-1 text-sm font-bold text-blue-600 placeholder-gray-300 focus:outline-none focus:border-blue-500" 
-                                            placeholder="例如:301" 
-                                            value={config.defaultClass || ''} 
-                                            onChange={(e) => setConfig({...config, defaultClass: e.target.value})} 
-                                            title="輸入後，填寫座號時會自動帶入此班級"
-                                        />
+                                        <div className="relative">
+                                            <input 
+                                                list="class-options"
+                                                type="text" 
+                                                className={`w-24 bg-white border-2 rounded px-2 py-1 text-sm font-bold placeholder-gray-300 focus:outline-none transition-colors ${!isClassValid ? 'border-red-500 text-red-600 focus:border-red-600' : 'border-gray-300 text-blue-600 focus:border-blue-500'}`} 
+                                                placeholder="例如:301" 
+                                                value={config.defaultClass || ''} 
+                                                onChange={(e) => setConfig({...config, defaultClass: e.target.value})} 
+                                                title="輸入後，填寫座號時會自動帶入此班級"
+                                            />
+                                            {!isClassValid && (
+                                                <div className="absolute top-full left-0 mt-1 bg-red-500 text-white text-[10px] px-1 rounded whitespace-nowrap z-50 shadow-lg animate-bounce">
+                                                    ⚠️ 名單無此班級
+                                                </div>
+                                            )}
+                                        </div>
+                                        <datalist id="class-options">
+                                            {availableClasses.map(c => <option key={c} value={c} />)}
+                                        </datalist>
                                     </div>
                                 </>
                             ) : (
