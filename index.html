@@ -395,7 +395,7 @@
             const [syncStatus, setSyncStatus] = useState('idle');
             const [currentTime, setCurrentTime] = useState(new Date());
             const [mode, setMode] = useState('edit');
-            const [config, setConfig] = useState({ rows: 5, cols: 7, date: getTodayString(), systemTitle: '' });
+            const [config, setConfig] = useState({ rows: 5, cols: 7, date: getTodayString(), systemTitle: '', defaultClass: '' });
             const [schedule, setSchedule] = useState(DEFAULT_SCHEDULE);
             const [rosterText, setRosterText] = useState(DEFAULT_ROSTER);
             const [rosterMap, setRosterMap] = useState({});
@@ -674,7 +674,13 @@
                 let newNum = currentNum;
 
                 if (type === 'class') newClass = value.trim();
-                if (type === 'seat') newNum = value.trim();
+                if (type === 'seat') {
+                    newNum = value.trim();
+                    // 如果正在輸入座號，且還沒有班級，自動套用預設班級
+                    if (!newClass && config.defaultClass && newNum) {
+                        newClass = config.defaultClass;
+                    }
+                }
 
                 let newVal = '';
                 if (newClass && newNum) {
@@ -771,11 +777,24 @@
                         <div className="flex items-center gap-4">
                             <div className="flex gap-1 ml-2"><div className="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div><div className="w-3 h-3 rounded-full bg-yellow-500"></div><div className="w-3 h-3 rounded-full bg-green-500"></div></div>
                             {mode === 'edit' ? (
-                                <input type="text" className="font-black text-xl tracking-widest text-gray-700 bg-transparent border-b-2 border-gray-500 outline-none hidden md:block placeholder-gray-400 w-64 select-text" value={config.systemTitle || ''} placeholder="請輸入班級名稱" onChange={(e) => setConfig({...config, systemTitle: e.target.value})} />
+                                <>
+                                    <input type="text" className="font-black text-xl tracking-widest text-gray-700 bg-transparent border-b-2 border-gray-500 outline-none hidden md:block placeholder-gray-400 w-64 select-text" value={config.systemTitle || ''} placeholder="請輸入班級名稱" onChange={(e) => setConfig({...config, systemTitle: e.target.value})} />
+                                    <div className="hidden md:flex items-center gap-2 ml-2 border-l pl-4 border-gray-400">
+                                        <span className="text-xs font-bold text-gray-500">預設班級:</span>
+                                        <input 
+                                            type="text" 
+                                            className="w-20 bg-white border border-gray-300 rounded px-2 py-1 text-sm font-bold text-blue-600 placeholder-gray-300 focus:outline-none focus:border-blue-500" 
+                                            placeholder="例如:301" 
+                                            value={config.defaultClass || ''} 
+                                            onChange={(e) => setConfig({...config, defaultClass: e.target.value})} 
+                                            title="輸入後，填寫座號時會自動帶入此班級"
+                                        />
+                                    </div>
+                                </>
                             ) : (
                                 <span className="font-black text-xl tracking-widest text-gray-600 hidden md:block">{config.systemTitle || activeClassroom || '班級名稱'}</span>
                             )}
-                            <button onClick={saveToCloud} disabled={syncStatus === 'saving'} className={`flex items-center gap-2 px-3 py-1 rounded-full border-inner shadow-inner transition-colors ${syncStatus === 'saved' ? 'bg-green-100' : 'bg-gray-200 hover:bg-gray-300'}`} title="手動儲存">
+                            <button onClick={saveToCloud} disabled={syncStatus === 'saving'} className={`flex items-center gap-2 px-3 py-1 rounded-full border-inner shadow-inner transition-colors ${syncStatus === 'saved' ? 'bg-green-100' : 'bg-gray-200 hover:bg-gray-300'} ml-2`} title="手動儲存">
                                 {syncStatus === 'loading' ? <Icon name="refresh-cw" className="animate-spin text-blue-500" size={14} /> : syncStatus === 'saving' ? <Icon name="cloud-upload" className="animate-bounce text-blue-500" size={14} /> : syncStatus === 'saved' ? <Icon name="check" className="text-green-600" size={14} /> : syncStatus === 'error' ? <Icon name="cloud-off" className="text-red-500" size={14} /> : syncStatus === 'not-configured' ? <Icon name="alert-circle" className="text-orange-500" size={14} /> : <Icon name="save" className="text-gray-600" size={14} />}
                                 <span className={`text-xs font-bold ${syncStatus === 'saved' ? 'text-green-700' : 'text-gray-600'}`}>{syncStatus === 'loading' ? '讀取...' : syncStatus === 'saving' ? '儲存中...' : syncStatus === 'saved' ? '已儲存' : syncStatus === 'error' ? '失敗' : syncStatus === 'not-configured' ? '未設定' : '點此存檔'}</span>
                             </button>
@@ -858,7 +877,7 @@
                                                         <div className="flex flex-col w-full items-center justify-center gap-1">
                                                             <input 
                                                                 type="text"
-                                                                placeholder="班級"
+                                                                placeholder={config.defaultClass || "班級"}
                                                                 className={`w-full text-center bg-transparent outline-none text-xs md:text-sm font-bold p-0 placeholder-gray-500 transition-colors ${editClass ? 'text-blue-400' : 'text-gray-500'}`}
                                                                 value={editClass}
                                                                 onChange={(e) => updateSeatNumber(r, c, 'class', e.target.value)}
