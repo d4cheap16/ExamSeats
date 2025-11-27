@@ -679,11 +679,12 @@
                 let newClass = currentClass;
                 let newNum = currentNum;
 
-                if (type === 'class') newClass = value.trim();
+                // 修正：移除 trim，允許輸入空白（輸入完成後比對時再 trim 即可）
+                if (type === 'class') newClass = value; 
                 if (type === 'seat') {
-                    newNum = value.trim();
+                    newNum = value; // 修正：移除 trim
                     // 如果正在輸入座號，且還沒有班級，自動套用預設班級
-                    if (!newClass && config.defaultClass && newNum) {
+                    if (!newClass && config.defaultClass && newNum.trim()) {
                         newClass = config.defaultClass;
                     }
                 }
@@ -773,8 +774,8 @@
                 });
             }, [schedule, mode, currentMinutes]);
 
-            // 計算 Default Class 是否合法
-            const isClassValid = !config.defaultClass || availableClasses.includes(config.defaultClass);
+            // 計算 Default Class 是否合法 (修正：加入 trim)
+            const isClassValid = !config.defaultClass || availableClasses.includes(config.defaultClass.trim());
 
             if (isAdminMode) return <AdminPanel onBack={() => setIsAdminMode(false)} onEnterClass={(id) => { setIsAdminMode(false); setActiveClassroom(id); }} />;
             if (!activeClassroom) return <LoginScreen onLogin={setActiveClassroom} onAdminLogin={() => setIsAdminMode(true)} />;
@@ -891,6 +892,11 @@
                                                 ? seat.number.split('-') 
                                                 : ['', seat.number];
 
+                                            // Grid Cell Validation: Check if the entered class exists in the available list
+                                            // Note: editClass is trimmed for check, but shown as is.
+                                            // Only validate if there is a class entered.
+                                            const isCellClassValid = !editClass || availableClasses.includes(editClass.trim());
+
                                             return (
                                                 <div key={key} onClick={() => mode === 'view' && toggleSeatStatus(r, c)} className={`relative w-full h-full p-1 rounded border-b-4 transition-all flex flex-col items-center justify-center shadow-lg select-none ${!seat.number ? 'bg-slate-700 border-slate-900 opacity-30' : ''} ${seat.number && !isAbsent && !isDuplicate ? 'bg-slate-100 border-slate-300 text-slate-900 hover:bg-white cursor-pointer' : ''} ${isDuplicate ? 'bg-red-100 border-red-500 text-red-900 ring-2 ring-red-500' : ''} ${isAbsent ? 'bg-red-500 border-red-700 text-white hover:bg-red-400 cursor-pointer' : ''}`}>
                                                     {mode === 'edit' ? (
@@ -898,10 +904,12 @@
                                                             <input 
                                                                 type="text"
                                                                 placeholder={config.defaultClass || "班級"}
-                                                                className={`w-full text-center bg-transparent outline-none text-xs md:text-sm font-bold p-0 placeholder-gray-500 transition-colors ${editClass ? 'text-blue-400' : 'text-gray-500'}`}
+                                                                // 修正：加入驗證狀態的樣式 (紅字)
+                                                                className={`w-full text-center bg-transparent outline-none text-xs md:text-sm font-bold p-0 placeholder-gray-500 transition-colors ${!isCellClassValid ? 'text-red-500 font-black' : (editClass ? 'text-blue-400' : 'text-gray-500')}`}
                                                                 value={editClass}
                                                                 onChange={(e) => updateSeatNumber(r, c, 'class', e.target.value)}
                                                                 onKeyDown={(e) => handleKeyDown(e, r, c, 'class')}
+                                                                title={!isCellClassValid ? "⚠️ 名單無此班級" : ""}
                                                             />
                                                             <input 
                                                                 ref={el => inputRefs.current[`${key}-seat`] = el} 
