@@ -897,15 +897,33 @@
                                             // Only validate if there is a class entered.
                                             const isCellClassValid = !editClass || availableClasses.includes(editClass.trim());
 
+                                            // Determine container class based on state priority
+                                            let containerClasses = "relative w-full h-full p-1 rounded border-b-4 transition-all flex flex-col items-center justify-center shadow-lg select-none ";
+
+                                            if (mode === 'edit' && !isCellClassValid) {
+                                                // Invalid Class -> High Priority Orange
+                                                containerClasses += "bg-orange-500 border-orange-700 text-white"; 
+                                            } else if (isDuplicate) {
+                                                containerClasses += "bg-red-100 border-red-500 text-red-900 ring-2 ring-red-500";
+                                            } else if (isAbsent) {
+                                                containerClasses += "bg-red-500 border-red-700 text-white hover:bg-red-400 cursor-pointer";
+                                            } else if (seat.number) {
+                                                // Normal occupied seat
+                                                containerClasses += "bg-slate-100 border-slate-300 text-slate-900 hover:bg-white cursor-pointer";
+                                            } else {
+                                                // Empty seat
+                                                containerClasses += "bg-slate-700 border-slate-900 opacity-30";
+                                            }
+
                                             return (
-                                                <div key={key} onClick={() => mode === 'view' && toggleSeatStatus(r, c)} className={`relative w-full h-full p-1 rounded border-b-4 transition-all flex flex-col items-center justify-center shadow-lg select-none ${!seat.number ? 'bg-slate-700 border-slate-900 opacity-30' : ''} ${seat.number && !isAbsent && !isDuplicate ? 'bg-slate-100 border-slate-300 text-slate-900 hover:bg-white cursor-pointer' : ''} ${isDuplicate ? 'bg-red-100 border-red-500 text-red-900 ring-2 ring-red-500' : ''} ${isAbsent ? 'bg-red-500 border-red-700 text-white hover:bg-red-400 cursor-pointer' : ''}`}>
+                                                <div key={key} onClick={() => mode === 'view' && toggleSeatStatus(r, c)} className={containerClasses}>
                                                     {mode === 'edit' ? (
                                                         <div className="flex flex-col w-full items-center justify-center gap-1">
                                                             <input 
                                                                 type="text"
                                                                 placeholder={config.defaultClass || "班級"}
-                                                                // 修正：加入驗證狀態的樣式 (紅字)
-                                                                className={`w-full text-center bg-transparent outline-none text-xs md:text-sm font-bold p-0 placeholder-gray-500 transition-colors ${!isCellClassValid ? 'text-red-500 font-black' : (editClass ? 'text-blue-400' : 'text-gray-500')}`}
+                                                                // 修正：加入驗證狀態的樣式 (橘底白字)
+                                                                className={`w-full text-center bg-transparent outline-none text-xs md:text-sm font-bold p-0 placeholder-gray-500 transition-colors ${!isCellClassValid ? 'text-white font-black placeholder-white/50' : (editClass ? 'text-blue-400' : 'text-gray-500')}`}
                                                                 value={editClass}
                                                                 onChange={(e) => updateSeatNumber(r, c, 'class', e.target.value)}
                                                                 onKeyDown={(e) => handleKeyDown(e, r, c, 'class')}
@@ -915,7 +933,7 @@
                                                                 ref={el => inputRefs.current[`${key}-seat`] = el} 
                                                                 type="text"
                                                                 placeholder="座號"
-                                                                className={`w-full text-center bg-transparent outline-none font-bold text-2xl md:text-4xl border-b border-gray-400/50 focus:border-blue-500 p-0 select-text ${isDuplicate ? 'text-red-600 border-red-400' : (seat.number ? 'text-slate-900' : 'text-white')}`} 
+                                                                className={`w-full text-center bg-transparent outline-none font-bold text-2xl md:text-4xl border-b border-gray-400/50 focus:border-blue-500 p-0 select-text ${!isCellClassValid ? 'text-white border-white/50' : (isDuplicate ? 'text-red-600 border-red-400' : (seat.number ? 'text-slate-900' : 'text-white'))}`} 
                                                                 value={editSeat} 
                                                                 onChange={(e) => updateSeatNumber(r, c, 'seat', e.target.value)} 
                                                                 onKeyDown={(e) => handleKeyDown(e, r, c, 'seat')} 
@@ -935,7 +953,7 @@
                                                         </>
                                                     )}
                                                     {seat.number && (
-                                                        <div className={`text-sm md:text-xl font-bold truncate w-full text-center px-0.5 leading-tight mt-1 ${isAbsent ? 'text-red-100' : isDuplicate ? 'text-red-600' : 'text-slate-600'}`}>{studentName || (mode === 'edit' ? '' : '')}</div>
+                                                        <div className={`text-sm md:text-xl font-bold truncate w-full text-center px-0.5 leading-tight mt-1 ${isAbsent || (!isCellClassValid && mode === 'edit') ? 'text-white' : (isDuplicate ? 'text-red-600' : 'text-slate-600')}`}>{studentName || (mode === 'edit' ? '' : '')}</div>
                                                     )}
                                                     
                                                     {isAbsent && mode === 'view' && (
