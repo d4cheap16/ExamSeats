@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>監考系統 (Exam Monitor)</title>
     
+    <!-- 設定 Favicon (網頁圖示) - 新增部分 -->
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/d4cheap16/SEATS/main/chair.png">
+
     <!-- 載入 Tailwind CSS (樣式) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -724,10 +727,20 @@
 
             const handleKeyDown = (e, r, c, type) => {
                 let targetR = r; let targetC = c;
-                if (e.key === 'Enter') {
-                    if (type === 'class') {
+                
+                // === 修改部分開始 ===
+                // 在輸入「班級」時，若按下 Enter 或 ArrowDown，則跳轉至同一個格子內的「座號」輸入框
+                if (type === 'class') {
+                    if (e.key === 'Enter' || e.key === 'ArrowDown') {
+                        e.preventDefault(); // 阻擋預設換行或預設移動
+                        const targetKey = `${r}-${c}-seat`;
+                        if (inputRefs.current[targetKey]) { 
+                            inputRefs.current[targetKey].focus(); 
+                        }
+                        return;
                     }
                 }
+                // === 修改部分結束 ===
 
                 if (e.key === 'ArrowUp') targetR = Math.max(0, r - 1);
                 else if (e.key === 'ArrowDown') targetR = Math.min(config.rows - 1, r + 1);
