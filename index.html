@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>監考系統 (Exam Monitor)</title>
     
-    <!-- 設定 Favicon (網頁圖示) - 新增部分 -->
+    <!-- 設定 Favicon (網頁圖示) -->
     <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/d4cheap16/ExamSeats/main/desk.png">
 
     <!-- 載入 Tailwind CSS (樣式) -->
@@ -76,11 +76,11 @@
             outline: none;
             border-color: #2563eb;
         }
-        /* 班級標籤樣式 - 根據您的設定更新 */
+        /* 班級標籤樣式 */
         .class-badge {
-            font-size: 1.7rem; /* 已更新：加大字體 */
+            font-size: 1.7rem;
             line-height: 1.2;
-            padding: 6px 8px;   /* 已更新：加大內距 */
+            padding: 6px 8px;
             border-radius: 6px;
             font-weight: 900;
             letter-spacing: 0.05em;
@@ -153,11 +153,11 @@
         ];
 
         const DEFAULT_ROSTER = `[高一OO]
-1\t白金之星
-2\t石之海
+1\t王OO
+2\t林OO
 [高一XX]
-1\t瘋狂鑽石
-2\t皇后殺手';
+1\t林OO
+2\t林OO`;
 
         // --- Helpers ---
         const getClassColor = (className) => {
@@ -204,22 +204,6 @@
             const hashArray = Array.from(new Uint8Array(hashBuffer));
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
-
-        // 座號標準化 (用於比對重複，例如 "01" 與 "1" 視為相同)
-        const normalizeSeatId = (id) => {
-            if (!id) return '';
-            const str = id.toString().trim();
-            if (/^\d+$/.test(str)) {
-                return parseInt(str, 10).toString();
-            }
-            if (str.includes('-')) {
-                const parts = str.split('-');
-                if (parts.length === 2 && /^\d+$/.test(parts[1])) {
-                    return `${parts[0]}-${parseInt(parts[1], 10)}`;
-                }
-            }
-            return str;
-        };
 
         // --- Components ---
 
@@ -412,14 +396,15 @@
             const [schedule, setSchedule] = useState(DEFAULT_SCHEDULE);
             const [rosterText, setRosterText] = useState(DEFAULT_ROSTER);
             const [rosterMap, setRosterMap] = useState({});
-            const [availableClasses, setAvailableClasses] = useState([]); // 新增：可用班級清單
+            const [availableClasses, setAvailableClasses] = useState([]); 
             const [seats, setSeats] = useState({});
             const [showSettings, setShowSettings] = useState(false);
             const [activeClassroom, setActiveClassroom] = useState(null);
             const [isAdminMode, setIsAdminMode] = useState(false);
-            // 追蹤資料是否已載入，避免初始化時覆蓋 LocalStorage
             const [dataLoaded, setDataLoaded] = useState(false);
             const inputRefs = useRef({});
+            // ★★★ 新增：刪除狀態鎖 (Race Condition Protection) ★★★
+            const isDeletingRef = useRef(false);
 
             const [helperClassName, setHelperClassName] = useState('');
             const [helperStudentList, setHelperStudentList] = useState('');
@@ -429,7 +414,6 @@
                 const counts = {};
                 Object.entries(seats).forEach(([key, s]) => {
                     const [r, c] = key.split('-').map(Number);
-                    // 修正關鍵：只計算在目前顯示範圍內的座位 (r < rows, c < cols)
                     if (r < config.rows && c < config.cols && s.number) {
                         counts[s.number] = (counts[s.number] || 0) + 1;
                     }
@@ -455,14 +439,19 @@
                 return () => unsubscribe();
             }, []);
 
+            // ★★★ 新增：當進入新班級時，重置刪除鎖 ★★★
+            useEffect(() => {
+                if (activeClassroom) {
+                    isDeletingRef.current = false;
+                }
+            }, [activeClassroom]);
+
             // 資料讀取邏輯 (Load)
             useEffect(() => {
                 if (!activeClassroom) return;
                 
-                // 重置狀態
                 setDataLoaded(false);
 
-                // 優先嘗試讀取 LocalStorage (確保離線可用)
                 const loadLocal = () => {
                     const savedLocal = localStorage.getItem(`examMonitorData_${activeClassroom}`);
                     if (savedLocal) {
@@ -476,7 +465,6 @@
                             if (parsed.seats) setSeats(parsed.seats);
                         } catch(e) {}
                     }
-                    // 標記為已載入，允許開始自動存檔
                     setDataLoaded(true);
                 };
 
@@ -497,7 +485,6 @@
                         if (data.seats) setSeats(data.seats);
                         setSyncStatus('idle');
                     } else {
-                        // 雲端無資料，讀取本地
                         const savedLocal = localStorage.getItem(`examMonitorData_${activeClassroom}`);
                         if (savedLocal) {
                             try {
@@ -514,31 +501,30 @@
                 }, (error) => { 
                     console.error("Sync error", error); 
                     setSyncStatus('error');
-                    loadLocal(); // 雲端錯誤時，退回本地
+                    loadLocal(); 
                 });
                 return () => unsubscribe();
             }, [user, activeClassroom]);
 
-            // 自動存檔邏輯 (Auto-Save to LocalStorage)
+            // ★★★ 修改：自動存檔邏輯 (加入 isDeletingRef 判斷) ★★★
             useEffect(() => {
-                if (!activeClassroom || !dataLoaded) return; // 必須在資料載入後才開始監聽變更，避免覆蓋
+                // 如果正在刪除中 (isDeletingRef.current 為 true)，絕對不要執行自動存檔
+                if (!activeClassroom || !dataLoaded || isDeletingRef.current) return; 
 
                 const timer = setTimeout(() => {
                     const dataToSave = { config, schedule, rosterText, seats };
                     localStorage.setItem(`examMonitorData_${activeClassroom}`, JSON.stringify(dataToSave));
-                    // 可以在這裡加一個 console.log 來 debug，或者加一個小的 UI 提示
-                    // console.log('Auto-saved to localStorage');
-                }, 1000); // 延遲 1 秒存檔，避免頻繁寫入
+                }, 1000);
 
                 return () => clearTimeout(timer);
             }, [activeClassroom, config, schedule, rosterText, seats, dataLoaded]);
 
-            // 名單解析 (解析邏輯更新)
+            // 名單解析
             useEffect(() => {
                 console.groupCollapsed("📋 名單解析報告 (Roster Parse Report)");
                 const lines = rosterText.split('\n');
                 const newMap = {};
-                const foundClasses = new Set(); // 收集所有發現的班級
+                const foundClasses = new Set();
                 let currentClass = null;
                 let studentCount = 0;
 
@@ -549,7 +535,7 @@
                     const classMatch = trimmedLine.match(/^\[(.*)\]$/);
                     if (classMatch) {
                         currentClass = classMatch[1].trim();
-                        foundClasses.add(currentClass); // 記錄班級
+                        foundClasses.add(currentClass);
                         console.log(`✅ 切換班級 (Header): "${currentClass}"`);
                         return;
                     }
@@ -557,9 +543,8 @@
                     const parts = trimmedLine.split(/[\t,，\s]+/);
 
                     if (parts.length === 1) {
-                        // 修正：允許所有單元素行作為班級名稱 (包含純數字)
                         currentClass = parts[0];
-                        foundClasses.add(currentClass); // 記錄班級
+                        foundClasses.add(currentClass);
                         console.log(`✅ 切換班級 (Simple): "${currentClass}"`);
                         return;
                     }
@@ -598,7 +583,6 @@
                 console.log("🔑 所有可用 ID:", Object.keys(newMap));
                 console.groupEnd();
                 setRosterMap(newMap);
-                // 將 Set 轉為 Array 並排序，更新可用班級清單
                 setAvailableClasses(Array.from(foundClasses).sort());
             }, [rosterText]);
 
@@ -607,13 +591,9 @@
                 return () => clearInterval(timer);
             }, []);
 
-            // 輔助函式：尋找學生資料 (通用模糊搜尋 - 移植自 ClassSEAT)
             const findStudentData = (query) => {
                 if (!query) return null;
-                // 1. 嘗試完全匹配 (Exact Match)
                 if (rosterMap[query]) return rosterMap[query];
-
-                // 2. 解析查詢字串 (從右邊最後一個 '-' 切割)
                 const str = query.toString().trim();
                 const lastDashIndex = str.lastIndexOf('-');
                 
@@ -630,11 +610,9 @@
 
                 if (isNaN(queryNum)) return null;
 
-                // 3. 在名單中模糊搜尋
                 const foundKey = Object.keys(rosterMap).find(key => {
                     const kStr = key.toString();
                     const kLastDash = kStr.lastIndexOf('-');
-                    
                     let keyClass = null;
                     let keyNum = null;
 
@@ -646,20 +624,17 @@
                         keyNum = parseInt(kStr, 10);
                     }
 
-                    // 比對邏輯
                     if (queryClass) {
                         return keyClass === queryClass && keyNum === queryNum;
                     } else {
                         return keyNum === queryNum;
                     }
                 });
-
                 return foundKey ? rosterMap[foundKey] : null;
             };
 
             const saveToCloud = async () => {
                 if (!activeClassroom) return;
-                // 手動儲存時也一併更新本地
                 localStorage.setItem(`examMonitorData_${activeClassroom}`, JSON.stringify({ config, schedule, rosterText, seats }));
                 
                 if (!isFirebaseConfigured || !user) { alert('已儲存至本地 (未設定 Firebase)'); return; }
@@ -672,19 +647,38 @@
                 } catch (e) { console.error("Save failed:", e); setSyncStatus('error'); alert(`雲端儲存失敗: ${e.message}\n請檢查 Firebase 規則`); }
             };
 
+            // ★★★ 修改：刪除邏輯 (加入 isDeletingRef 鎖定) ★★★
             const deleteClassroomData = async () => {
                 if (!activeClassroom) return;
                 const confirmCode = prompt(`警告：這將會永久刪除「${activeClassroom}」的所有資料！\n\n請輸入「${activeClassroom}」以確認：`);
                 if (confirmCode === activeClassroom) {
                     try {
+                        // 1. 立刻上鎖，阻止任何 useEffect 觸發自動存檔
+                        isDeletingRef.current = true;
+
                         setSyncStatus('saving');
                         if (isFirebaseConfigured && user) {
                             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classrooms', activeClassroom));
                         }
+                        
+                        // 2. 徹底清除本地資料
                         localStorage.removeItem(`examMonitorData_${activeClassroom}`);
+                        
                         alert('資料已刪除。');
-                        setSchedule(DEFAULT_SCHEDULE); setSeats({}); setRosterText(DEFAULT_ROSTER); setActiveClassroom(null);
-                    } catch (e) { console.error(e); alert('刪除失敗'); setSyncStatus('error'); }
+                        
+                        // 3. 重置狀態
+                        setSchedule(DEFAULT_SCHEDULE); 
+                        setSeats({}); 
+                        setRosterText(DEFAULT_ROSTER); 
+                        setActiveClassroom(null);
+                        
+                    } catch (e) { 
+                        console.error(e); 
+                        alert('刪除失敗'); 
+                        setSyncStatus('error'); 
+                        // 若失敗則解鎖
+                        isDeletingRef.current = false;
+                    }
                 }
             };
 
@@ -716,7 +710,6 @@
                         shouldAttend++;
                         if (seat.status !== 'absent') actualAttend++;
                         else {
-                            // 修正：使用 findStudentData 搜尋缺考學生資料
                             const studentData = findStudentData(seat.number);
                             const name = studentData?.name || '';
                             const className = studentData?.className ? `(${studentData.className})` : '';
@@ -750,11 +743,9 @@
                 let newClass = currentClass;
                 let newNum = currentNum;
 
-                // 修正：移除 trim，允許輸入空白（輸入完成後比對時再 trim 即可）
                 if (type === 'class') newClass = value; 
                 if (type === 'seat') {
-                    newNum = value; // 修正：移除 trim
-                    // 如果正在輸入座號，且還沒有班級，自動套用預設班級
+                    newNum = value;
                     if (!newClass && config.defaultClass && newNum.trim()) {
                         newClass = config.defaultClass;
                     }
@@ -802,11 +793,9 @@
             const handleKeyDown = (e, r, c, type) => {
                 let targetR = r; let targetC = c;
                 
-                // === 修改部分開始 ===
-                // 在輸入「班級」時，若按下 Enter 或 ArrowDown，則跳轉至同一個格子內的「座號」輸入框
                 if (type === 'class') {
                     if (e.key === 'Enter' || e.key === 'ArrowDown') {
-                        e.preventDefault(); // 阻擋預設換行或預設移動
+                        e.preventDefault(); 
                         const targetKey = `${r}-${c}-seat`;
                         if (inputRefs.current[targetKey]) { 
                             inputRefs.current[targetKey].focus(); 
@@ -814,7 +803,6 @@
                         return;
                     }
                 }
-                // === 修改部分結束 ===
 
                 if (e.key === 'ArrowUp') targetR = Math.max(0, r - 1);
                 else if (e.key === 'ArrowDown') targetR = Math.min(config.rows - 1, r + 1);
@@ -855,7 +843,6 @@
                 });
             }, [schedule, mode, currentMinutes]);
 
-            // 計算 Default Class 是否合法 (修正：加入 trim)
             const isClassValid = !config.defaultClass || availableClasses.includes(config.defaultClass.trim());
 
             if (isAdminMode) return <AdminPanel onBack={() => setIsAdminMode(false)} onEnterClass={(id) => { setIsAdminMode(false); setActiveClassroom(id); }} />;
