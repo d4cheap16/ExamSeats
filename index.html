@@ -205,6 +205,22 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
+        // 座號標準化 (用於比對重複，例如 "01" 與 "1" 視為相同)
+        const normalizeSeatId = (id) => {
+            if (!id) return '';
+            const str = id.toString().trim();
+            if (/^\d+$/.test(str)) {
+                return parseInt(str, 10).toString();
+            }
+            if (str.includes('-')) {
+                const parts = str.split('-');
+                if (parts.length === 2 && /^\d+$/.test(parts[1])) {
+                    return `${parts[0]}-${parseInt(parts[1], 10)}`;
+                }
+            }
+            return str;
+        };
+
         // --- Components ---
 
         const AdminPanel = ({ onBack, onEnterClass }) => {
@@ -510,6 +526,7 @@
                 return () => clearTimeout(timer);
             }, [activeClassroom, config, schedule, rosterText, seats, dataLoaded]);
 
+            // 名單解析 (解析邏輯更新)
             useEffect(() => {
                 console.groupCollapsed("📋 名單解析報告 (Roster Parse Report)");
                 const lines = rosterText.split('\n');
@@ -533,12 +550,11 @@
                     const parts = trimmedLine.split(/[\t,，\s]+/);
 
                     if (parts.length === 1) {
-                        if (!/^\d+$/.test(parts[0])) {
-                             currentClass = parts[0];
-                             foundClasses.add(currentClass); // 記錄班級
-                             console.log(`✅ 切換班級 (Simple): "${currentClass}"`);
-                             return;
-                        }
+                        // 修正：允許所有單元素行作為班級名稱 (包含純數字)
+                        currentClass = parts[0];
+                        foundClasses.add(currentClass); // 記錄班級
+                        console.log(`✅ 切換班級 (Simple): "${currentClass}"`);
+                        return;
                     }
 
                     if (parts.length >= 2) {
@@ -583,6 +599,56 @@
                 const timer = setInterval(() => setCurrentTime(new Date()), 1000);
                 return () => clearInterval(timer);
             }, []);
+
+            // 輔助函式：尋找學生資料 (通用模糊搜尋 - 移植自 ClassSEAT)
+            const findStudentData = (query) => {
+                if (!query) return null;
+                // 1. 嘗試完全匹配 (Exact Match)
+                if (rosterMap[query]) return rosterMap[query];
+
+                // 2. 解析查詢字串 (從右邊最後一個 '-' 切割)
+                const str = query.toString().trim();
+                const lastDashIndex = str.lastIndexOf('-');
+                
+                let queryClass = null;
+                let queryNum = null;
+
+                if (lastDashIndex !== -1) {
+                    queryClass = str.substring(0, lastDashIndex).trim();
+                    const numPart = str.substring(lastDashIndex + 1).trim();
+                    queryNum = parseInt(numPart, 10);
+                } else {
+                    queryNum = parseInt(str, 10);
+                }
+
+                if (isNaN(queryNum)) return null;
+
+                // 3. 在名單中模糊搜尋
+                const foundKey = Object.keys(rosterMap).find(key => {
+                    const kStr = key.toString();
+                    const kLastDash = kStr.lastIndexOf('-');
+                    
+                    let keyClass = null;
+                    let keyNum = null;
+
+                    if (kLastDash !== -1) {
+                        keyClass = kStr.substring(0, kLastDash).trim();
+                        const kNumPart = kStr.substring(kLastDash + 1).trim();
+                        keyNum = parseInt(kNumPart, 10);
+                    } else {
+                        keyNum = parseInt(kStr, 10);
+                    }
+
+                    // 比對邏輯
+                    if (queryClass) {
+                        return keyClass === queryClass && keyNum === queryNum;
+                    } else {
+                        return keyNum === queryNum;
+                    }
+                });
+
+                return foundKey ? rosterMap[foundKey] : null;
+            };
 
             const saveToCloud = async () => {
                 if (!activeClassroom) return;
@@ -643,7 +709,8 @@
                         shouldAttend++;
                         if (seat.status !== 'absent') actualAttend++;
                         else {
-                            const studentData = rosterMap[seat.number];
+                            // 修正：使用 findStudentData 搜尋缺考學生資料
+                            const studentData = findStudentData(seat.number);
                             const name = studentData?.name || '';
                             const className = studentData?.className ? `(${studentData.className})` : '';
                             const reason = seat.reason || '缺考'; 
@@ -887,7 +954,8 @@
                                         Array.from({ length: config.cols }).map((_, c) => {
                                             const key = `${r}-${c}`;
                                             const seat = seats[key] || { number: '', status: 'empty' };
-                                            const studentData = rosterMap[seat.number];
+                                            // 修正：使用 findStudentData 搜尋學生資料
+                                            const studentData = findStudentData(seat.number);
                                             const studentName = studentData?.name || '';
                                             const className = studentData?.className || '';
                                             
