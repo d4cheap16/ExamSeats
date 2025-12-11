@@ -424,11 +424,18 @@
             const [helperClassName, setHelperClassName] = useState('');
             const [helperStudentList, setHelperStudentList] = useState('');
 
+            // 修正重複座號邏輯：只檢查在目前 config.rows 和 config.cols 範圍內的座位
             const duplicateNumbers = useMemo(() => {
                 const counts = {};
-                Object.values(seats).forEach(s => { if (s.number) counts[s.number] = (counts[s.number] || 0) + 1; });
+                Object.entries(seats).forEach(([key, s]) => {
+                    const [r, c] = key.split('-').map(Number);
+                    // 修正關鍵：只計算在目前顯示範圍內的座位 (r < rows, c < cols)
+                    if (r < config.rows && c < config.cols && s.number) {
+                        counts[s.number] = (counts[s.number] || 0) + 1;
+                    }
+                });
                 return new Set(Object.keys(counts).filter(n => counts[n] > 1));
-            }, [seats]);
+            }, [seats, config.rows, config.cols]);
 
             useEffect(() => {
                 const initAuth = async () => {
@@ -997,8 +1004,8 @@
                                                             <input 
                                                                 type="text"
                                                                 placeholder={config.defaultClass || "班級"}
-                                                                // 修正：加入驗證狀態的樣式 (橘底白字)
-                                                                className={`w-full text-center bg-transparent outline-none text-xs md:text-sm font-bold p-0 placeholder-gray-500 transition-colors ${!isCellClassValid ? 'text-white font-black placeholder-white/50' : (editClass ? 'text-blue-400' : 'text-gray-500')}`}
+                                                                // 修正：加大字體並調整間距 (text-base md:text-xl py-1)
+                                                                className={`w-full text-center bg-transparent outline-none text-base md:text-xl font-bold py-1 placeholder-gray-400/70 transition-colors ${!isCellClassValid ? 'text-white font-black placeholder-white/50' : (editClass ? 'text-blue-400' : 'text-gray-500')}`}
                                                                 value={editClass}
                                                                 onChange={(e) => updateSeatNumber(r, c, 'class', e.target.value)}
                                                                 onKeyDown={(e) => handleKeyDown(e, r, c, 'class')}
